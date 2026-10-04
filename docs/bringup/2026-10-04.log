@@ -46,3 +46,26 @@ Short matrix (drive one pin low): no consistent followers -> no wire shorts. Pin
 Chip marking: PCF8575CTS -> PCF8575C (open-drain P-ports, no internal pull-up, VCC 4.5-5.5V).
 Module: Open-Smart, VCC -> AMS1117-3.3 (unverified) -> VDD. With 3.3V on VCC, chip VDD likely ~2.2V.
 Fix plan: 3V3 to VDD (or bridge VCC-VDD pad), add 16x 10k pull-ups P00-P17 to 3V3. Never 5V on VCC (SDA/SCL pulled to VCC).
+
+## Rework (operator, same day)
+- PCF VDD jumpered to 3V3 (bypasses module AMS1117).
+- LCD BL tied to 3V3.
+- wiring.md CS/DC "correction" (CS=10, DC=9) -> bench proved original was right, reverted.
+
+## PCF8575 after VDD fix
+drive 0xFF00 -> FF00 5C00 5800 4800 4000 ; drive 0xFFFF -> FFFF 5CFF 5CFF 54BF 4091
+No more I2C ERR (power OK). Inputs still drift -> external pull-ups mandatory (PCF8575C).
+
+## LCD after BL fix
+BL->3V3: backlight on (PASS). Fully dark before = BL floating.
+pins.h as documented (CS10 DC9 SCK12 MOSI11), mode0/mode3, 4 MHz: no image        FAIL
+CS/DC swapped only: no image                                                    FAIL
+SCK/MOSI swapped (SCK11 MOSI12): mode0+CS9/DC10 -> BLUE, mode3+CS9/DC10 -> WHITE  PASS
+Candidate CS9 DC10 SCK11 MOSI12 mode3 4 MHz: red, green, blue, white             PASS
+pins.h updated to CS9 DC10 SCK11 MOSI12, default 20 MHz mode0: R G B W           PASS
+No BGR/inversion fix needed (INVON + MADCTL 0x00 correct).
+
+## Open
+- 16x 10k pull-ups on PCF P00-P17 -> then button test
+- PCF INT never fired (recheck after pull-ups)
+- BL to GPIO14 PWM: measure BL current first

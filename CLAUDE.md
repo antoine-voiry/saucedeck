@@ -80,6 +80,8 @@ Done = `pio test -e native` green AND `pio run -e saucedeck -e bringup` SUCCESS 
 
 - GPIO3 = strapping pin (JTAG source). Used by ENC1 phase B. Safe with default eFuses. Never burn `STRAP_JTAG_SEL`.
 - GPIO13 = FSPIQ (MISO) on IO_MUX. Used by PCF INT. Display driver must set MISO = -1.
+- LCD SCK=GPIO11, MOSI=GPIO12 (bench-verified, reversed vs FSPI IO_MUX) → GPIO matrix, keep SPI ≤40 MHz.
+- PCF8575 module carries a PCF8575C: open-drain, NO internal pull-ups → needs external 10k on every input. VDD jumpered to 3V3. Never 5V on module VCC.
 - GPIO19/20 = USB D-/D+. GPIO26–32 = in-package flash/PSRAM. Never touch.
 - GPIO21 = onboard WS2812 on S3-Zero.
 - WS2812B strip at 5V: VIH min 0.7×VDD = 3.5V > 3.3V GPIO out. Marginal. Recommend 74AHCT1G125 level shifter.

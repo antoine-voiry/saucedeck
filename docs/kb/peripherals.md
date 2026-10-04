@@ -22,7 +22,9 @@
 ## ST7789 LCD (GMT020-02-8P, 2", 240×320)
 - **Write-only SPI in this design (no MISO).** `[verified: wiring.md]`
 - **Onboard 6206A LDO → accepts 5V VCC.** `[unverified — from wiring.md notes]`
-- **SAUCEDECK unit: fully dark (no backlight) with BL floating.** BL likely needs pull-high. `[verified: bench 2026-10-04; BL→3V3 fix unverified]`
+- **GMT020-02-8P: BL floating = backlight OFF. BL→3V3 = on.** Contradicts "onboard circuit keeps backlight on". `[verified: bench 2026-10-04]`
+- **GMT020-02-8P init: SWRESET, SLPOUT, COLMOD 0x55, MADCTL 0x00, INVON, NORON, DISPON → correct RGB colors at 20 MHz, SPI mode 0 (mode 3 also OK).** `[verified: bench 2026-10-04]`
+- **Debug trick: no image with backlight on → paint a distinct color per SPI variant (mode × CS/DC × SCK/MOSI swap), ask which color shows. Found swapped wires in one run.** `[verified: bench 2026-10-04]`
 
 ## WS2812B
 - **VIH min = 0.7 × VDD → 3.5V at 5V supply.** 3.3V data marginal. `[verified: WS2812B datasheet]`

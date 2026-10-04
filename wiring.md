@@ -7,7 +7,7 @@
 | Pin / Pad | Destination Signal / Device | Bus / Protocol | Notes |
 | :--- | :--- | :--- | :--- |
 | **5V / VBUS** | • LCD `VCC`<br>• LED Strip `5V Rail` | Power (5V) | Direct 5V from USB host |
-| **3V3** | PCF8575 `VCC` | Power (3.3V) | Logic rail for I/O expander |
+| **3V3** | PCF8575 `VCC` + `VDD`, LCD `BL` | Power (3.3V) | VDD jumper bypasses module AMS1117 (else chip gets ~2.2V) |
 | **GND** | Common System GND | Ground | Tied across all modules, switches, and LED strip |
 | **GPIO 1** | PCF8575 — `SDA` | I2C Data | Hardware I2C data line |
 | **GPIO 2** | EC11 #1 — `Phase A` | Direct GPIO | Hardware interrupt line |
@@ -19,8 +19,8 @@
 | **GPIO 8** | LCD — `RST` | SPI Control | Display hardware reset line |
 | **GPIO 9** | LCD — `CS` | SPI Control | Chip Select |
 | **GPIO 10** | LCD — `DC` | SPI Control | ST7789 Data / Command select |
-| **GPIO 11** | LCD — `SDA` (MOSI) | SPI Master Out | Master Out Slave In |
-| **GPIO 12** | LCD — `SCL` (SCK) | SPI Clock | Master Clock |
+| **GPIO 11** | LCD — `SCL` (SCK) | SPI Clock | Master Clock (GPIO matrix, ≤40 MHz) |
+| **GPIO 12** | LCD — `SDA` (MOSI) | SPI Master Out | Master Out Slave In |
 | **GPIO 13** | PCF8575 — `INT` | Direct GPIO | Active-Low interrupt (`INPUT_PULLUP`) |
 
 ---
@@ -73,12 +73,14 @@ All switch terminals short to **GND** when pressed.
 | :--- | :--- | :--- |
 | **GND** | System Common `GND` | Power Ground |
 | **VCC** | ESP32 `5V` (or `3V3`) | Onboard 6206A 3.3V LDO handles 5V input |
-| **SCL** | ESP32 `GPIO 12` | SPI Clock |
-| **SDA** | ESP32 `GPIO 11` | SPI MOSI |
+| **SCL** | ESP32 `GPIO 11` | SPI Clock |
+| **SDA** | ESP32 `GPIO 12` | SPI MOSI |
 | **RST** | ESP32 `GPIO 8` | Hardware Reset |
 | **DC** | ESP32 `GPIO 10` | Data/Command Register Select |
 | **CS** | ESP32 `GPIO 9` | SPI Chip Select |
-| **BL** | **NC (Unconnected)** / Solder bridge to `VCC` NOT DONE | Onboard circuit keeps backlight on |
+| **BL** | ESP32 `3V3` | Backlight always on. Floating BL = backlight OFF (bench 2026-10-04). Future: GPIO14 PWM after current check |
+
+> Pin map bench-verified 2026-10-04 (color cycle correct, SPI mode 0/3 both OK, no inversion/BGR fix needed beyond INVON).
 
 ---
 
@@ -91,8 +93,8 @@ All switch terminals short to **GND** when pressed.
 #define PCF_INT_PIN        13
 
 // ST7789 LCD SPI Configuration
-#define TFT_SCL_PIN        12
-#define TFT_SDA_PIN        11
+#define TFT_SCL_PIN        11
+#define TFT_SDA_PIN        12
 #define TFT_CS_PIN          9
 #define TFT_DC_PIN         10
 #define TFT_RST_PIN         8

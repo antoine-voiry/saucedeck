@@ -5,6 +5,7 @@
 - **GPIO19 = USB D-, GPIO20 = USB D+.** `[verified: ESP32-S3 datasheet, pin list]`
 - **GPIO26–32 wired to in-package SPI flash/PSRAM.** Do not use. `[verified: ESP32-S3 datasheet, pin list]`
 - **FSPI IO_MUX pins: GPIO10 = FSPICS0, GPIO11 = FSPID (MOSI), GPIO12 = FSPICLK, GPIO13 = FSPIQ (MISO).** IO_MUX path allows highest SPI clock; other pins route via GPIO matrix. `[verified: ESP32-S3 TRM, IO MUX table]`
+- **GPIO-matrix-routed SPI tops out ~40 MHz (IO_MUX up to 80 MHz).** SAUCEDECK LCD SCK=11/MOSI=12 is matrix-routed. `[unverified — check TRM SPI timing section]`
 - **GPIO is 3.3V, not 5V tolerant.** `[verified: ESP32-S3 datasheet, electrical characteristics]`
 - **Internal pull-up ≈ 45 kΩ.** `[unverified — check datasheet DC characteristics]`
 - **ADC1 = GPIO1–10, ADC2 = GPIO11–20. ADC2 unusable while Wi-Fi active.** `[verified: ESP32-S3 datasheet]`
