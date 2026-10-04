@@ -1,0 +1,42 @@
+# Bring-up session 2026-10-04 (host-driven via tools/bench.py, firmware env bringup)
+# Rework before session: none. LCD BL pin floating (not bridged).
+
+## I2C
+I2C scan @ 400000 Hz, SDA=1 SCL=1 -> 0x20 only            PASS
+I2C scan @ 100000 Hz -> 0x20 only                           PASS
+
+## LED strip (first LED, rgbLedWrite GPIO7, 470R, 70uF, 5V VBUS)
+Operator: red, green, blue, white in order                  PASS
+
+## LCD (ST7789, minimal driver, MISO unused)
+Operator: screen stays fully dark, no backlight             FAIL
+Suspect: BL pin floating -> backlight off. Jumper BL->3V3 not yet tried.
+
+## PCF8575 inputs
+Idle read #1: FF00 (P00-P07 low)                            FAIL
+Idle read #2: 0000                                          FAIL
+Burst 400k: FF0C FF0C FF0C FF0C FF0C FF0C FF08 FF08 FF08 FF08
+Burst 100k: 7FFF x10
+Monitor 10 s untouched: P03,P10-P16 toggle DOWN/UP every ~20 ms (50 Hz mains pickup); INT low edges: 0
+Drive patterns:
+  drive 0x0000 -> 0000 0000 0000 0000 0000
+  drive 0xFF00 -> FF00 FF00 FF00 FF00 FF00
+  drive 0x00FF -> 00FF 00FF 00FF 00F7 00E4   (high bits sag)
+  drive 0xFFFF -> FFFF FFFF FFFF ERR ERR     (I2C drops out)
+Diagnosis: PCF8575 VCC/GND open -> chip parasitically powered via SDA/SCL clamp diodes.
+           Answers I2C, sinks low, but quasi-bidirectional pull-ups + INT dead.
+Operator measured 3.3V between PCF VCC and PCF GND pins -> power theory REJECTED.
+Rerun drive patterns after measure:
+  drive 0x0000 -> 0000 0000 0000 0000 0000
+  drive 0xFF00 -> FF00 F600 F200 F200 F000   (high bits still sag)
+  drive 0x00FF -> 00FF 00FF 00FF 00FF 00FF
+  drive 0xFFFF -> FFFF FEFF FEFF FEFF FEFF
+Open: something on P lines pulls them down / PCF module defective. Next: bisect (unplug button harness, rerun z).
+INT: 0 low edges despite input changes -> INT wire/GPIO13 also suspect.
+
+## Encoders (direct GPIO)
+Idle: ENC1 A=0 B=0 first read, later A=1 B=1; ENC2 A=1 B=1.
+Untouched 10 s: 0 toggles both encoders (no noise)                         PASS
+ENC1: operator CW then CCW -> decoded CW x5 then CCW x7                     PASS
+ENC2: operator CCW continuous 30 s -> decoded CCW only, 1238 toggles        PASS
+Bursts of ~5 counts per wrist twist (~90 deg) with ~19 toggles -> 4 transitions/detent fits.

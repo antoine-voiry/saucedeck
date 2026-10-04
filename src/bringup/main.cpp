@@ -334,7 +334,138 @@ static void runAll() {
   checkLcd();
   checkLed();
   runControls(pcfOk);
-  Serial.println("\nDone. Copy this log into docs/bringup/. Press any key to rerun.");
+  Serial.println("\nDone. Copy this log into docs/bringup/.");
+}
+
+// ---------- single-shot commands (host-driven bench sessions) ----------
+
+static void cmdSnapshot() {
+  uint16_t v;
+  if (!pcfRead(v)) {
+    Serial.println("PCF: read error (no ACK)");
+  } else {
+    Serial.printf("PCF: 0x%04X low:", v);
+    bool any = false;
+    for (uint8_t i = 0; i < 16; i++)
+      if (!(v & (1u << i))) { Serial.printf(" %s", pcfPinName(i)); any = true; }
+    Serial.println(any ? "" : " none");
+  }
+  Serial.printf("INT: %d\n", digitalRead(PCF_INT_PIN));
+  for (int e = 0; e < 2; e++)
+    Serial.printf("ENC%d: A=%d B=%d\n", e + 1, digitalRead(kEncPins[e][0]), digitalRead(kEncPins[e][1]));
+}
+
+static void cmdMonitor(uint32_t ms) {
+  Serial.printf("Monitoring %lu s...\n", (unsigned long)(ms / 1000));
+  uint16_t last = 0xFFFF;
+  pcfRead(last);
+  QuadDecoder dec[2] = {
+      QuadDecoder(digitalRead(ENC1_PHASE_A_PIN), digitalRead(ENC1_PHASE_B_PIN)),
+      QuadDecoder(digitalRead(ENC2_PHASE_A_PIN), digitalRead(ENC2_PHASE_B_PIN)),
+  };
+  PhaseStats ph = {};
+  snapshotLevels(ph);
+  uint32_t intLows = 0;
+  bool intPrev = true;
+  uint32_t start = millis();
+  while (millis() - start < ms) {
+    bool intNow = digitalRead(PCF_INT_PIN);
+    if (intPrev && !intNow) intLows++;
+    intPrev = intNow;
+    uint16_t v;
+    if (pcfRead(v) && v != last) {
+      ButtonEvents ev = diffButtons(last, v);
+      for (uint8_t i = 0; i < 16; i++) {
+        if (ev.pressed & (1u << i)) Serial.printf("%6lu ms  %s DOWN\n", (unsigned long)(millis() - start), pcfPinName(i));
+        if (ev.released & (1u << i)) Serial.printf("%6lu ms  %s UP\n", (unsigned long)(millis() - start), pcfPinName(i));
+      }
+      last = v;
+    }
+    for (int e = 0; e < 2; e++) {
+      uint8_t a = digitalRead(kEncPins[e][0]), b = digitalRead(kEncPins[e][1]);
+      if (a != ph.level[e][0]) { ph.toggles[e][0]++; ph.level[e][0] = a; }
+      if (b != ph.level[e][1]) { ph.toggles[e][1]++; ph.level[e][1] = b; }
+      int d = dec[e].step(a, b);
+      if (d) Serial.printf("%6lu ms  ENC%d %s\n", (unsigned long)(millis() - start), e + 1, d > 0 ? "CW" : "CCW");
+    }
+    delayMicroseconds(500);
+  }
+  Serial.printf("INT low edges: %lu\n", (unsigned long)intLows);
+  for (int e = 0; e < 2; e++)
+    Serial.printf("ENC%d toggles: A=%lu B=%lu\n", e + 1, (unsigned long)ph.toggles[e][0],
+                  (unsigned long)ph.toggles[e][1]);
+}
+
+static uint32_t i2cHz = 400000;
+
+static void cmdScan() {
+  Serial.printf("I2C scan @ %lu Hz, SDA=%d SCL=%d (idle levels)\n", (unsigned long)i2cHz,
+                digitalRead(I2C_SDA_PIN), digitalRead(I2C_SCL_PIN));
+  int found = 0;
+  for (uint8_t a = 0x08; a < 0x78; a++) {
+    Wire.beginTransmission(a);
+    if (Wire.endTransmission() == 0) { Serial.printf(" 0x%02X", a); found++; }
+  }
+  Serial.printf("\n%d device(s) ACK%s\n", found, found > 3 ? "  <- bus stuck low / bad pull-ups" : "");
+}
+
+static void cmdReadBurst() {
+  Wire.beginTransmission(PCF_I2C_ADDR);
+  Wire.write(0xFF);
+  Wire.write(0xFF);
+  Serial.printf("write 0xFFFF -> err %d\n", Wire.endTransmission());
+  for (int i = 0; i < 10; i++) {
+    uint16_t v = 0;
+    bool ok = pcfRead(v);
+    Serial.printf(ok ? " %04X" : " ERR", v);
+    delay(20);
+  }
+  Serial.println();
+}
+
+// Drive pattern, read back 5x, then release to inputs. Powered PCF: low bits read 0 solid.
+static void cmdPattern(uint16_t pattern) {
+  Wire.beginTransmission(PCF_I2C_ADDR);
+  Wire.write(pattern & 0xFF);
+  Wire.write(pattern >> 8);
+  Serial.printf("drive 0x%04X -> err %d, read:", pattern, Wire.endTransmission());
+  for (int i = 0; i < 5; i++) {
+    uint16_t v = 0;
+    Serial.printf(pcfRead(v) ? " %04X" : " ERR", v);
+    delay(20);
+  }
+  Serial.println();
+  pcfAllInputs();
+}
+
+static void cmdToggleSpeed() {
+  i2cHz = i2cHz == 400000 ? 100000 : 400000;
+  Wire.setClock(i2cHz);
+  Serial.printf("I2C clock now %lu Hz\n", (unsigned long)i2cHz);
+}
+
+static void cmdLcd() {
+  Serial.println("LCD: RED, GREEN, BLUE, WHITE 1.5 s each, then stays WHITE");
+  tftInit();
+  for (uint16_t c : {0xF800, 0x07E0, 0x001F, 0xFFFF}) {
+    tftFill(c);
+    delay(1500);
+  }
+}
+
+static void cmdLed() {
+  Serial.println("LED1: RED, GREEN, BLUE 1.5 s each, then stays dim WHITE");
+  const uint8_t k = 32;
+  rgbLedWrite(LED_DATA_PIN, k, 0, 0); delay(1500);
+  rgbLedWrite(LED_DATA_PIN, 0, k, 0); delay(1500);
+  rgbLedWrite(LED_DATA_PIN, 0, 0, k); delay(1500);
+  rgbLedWrite(LED_DATA_PIN, k, k, k);
+}
+
+static void printHelp() {
+  Serial.println("Commands: i=I2C+idle  p=snapshot  m=monitor 10s  M=monitor 30s");
+  Serial.println("          l=LCD colors  w=LED1 colors  o=LED1 off  k=LCD black  g=guided full test");
+  Serial.println("          s=I2C scan  r=PCF write+10 reads  f=toggle I2C 400k/100k  z=PCF drive patterns");
 }
 
 void setup() {
@@ -345,12 +476,32 @@ void setup() {
   pinMode(PCF_INT_PIN, INPUT_PULLUP);
   for (auto &pins : kEncPins)
     for (uint8_t pin : pins) pinMode(pin, INPUT_PULLUP);
+  pcfAllInputs();
 
-  Serial.println("SAUCEDECK bring-up ready. Press any key to start.");
-  waitKey();
+  Serial.println("SAUCEDECK bring-up ready.");
+  printHelp();
+  Serial.println("OK>");
 }
 
 void loop() {
-  runAll();
-  waitKey();
+  if (!Serial.available()) { delay(10); return; }
+  char c = Serial.read();
+  switch (c) {
+    case 'i': { bool ok = checkI2C(); checkIdle(ok); break; }
+    case 'p': cmdSnapshot(); break;
+    case 'm': cmdMonitor(10000); break;
+    case 'M': cmdMonitor(30000); break;
+    case 'l': cmdLcd(); break;
+    case 'k': tftInit(); tftFill(0x0000); break;
+    case 'w': cmdLed(); break;
+    case 'o': rgbLedWrite(LED_DATA_PIN, 0, 0, 0); break;
+    case 'g': runAll(); break;
+    case 's': cmdScan(); break;
+    case 'r': cmdReadBurst(); break;
+    case 'f': cmdToggleSpeed(); break;
+    case 'z': cmdPattern(0x0000); cmdPattern(0xFF00); cmdPattern(0x00FF); cmdPattern(0xFFFF); break;
+    case 'h': case '?': printHelp(); break;
+    default: return;  // ignore CR/LF and noise
+  }
+  Serial.println("OK>");
 }
