@@ -59,7 +59,7 @@ All switch terminals short to **GND** when pressed.
 
 | Strip Pin | Connected To | Notes |
 | :--- | :--- | :--- |
-| **5V** | ESP32 `5V / VBUS` | 470 nF capacitor across 5V/GND at strip input — too small for bulk, see kb |
+| **5V** | ESP32 `5V / VBUS` | 70 µF electrolytic across 5V/GND at strip input (watch polarity) |
 | **GND** | System Common `GND` | |
 | **DIN** | ESP32 `GPIO 7` via series resistor | 470 Ω series resistor; place close to strip DIN |
 
