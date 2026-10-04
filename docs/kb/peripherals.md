@@ -5,9 +5,14 @@
 - **Quasi-bidirectional I/O: write 1 to use pin as input (weak pull-up). Read = 2 bytes, P0x first then P1x.** `[verified: TI PCF8575 datasheet]`
 - **I2C max 400 kHz.** `[verified: TI PCF8575 datasheet]`
 - **INT is open-drain, active-low; cleared by a read. Needs pull-up.** `[verified: TI PCF8575 datasheet]`
-- **Breakout module has onboard I2C pull-ups.** `[unverified — check module]`
+- **SAUCEDECK module = Open-Smart "PCF8575" board, chip marked PCF8575CTS → PCF8575C.** `[verified: operator read marking, 2026-10-04]`
+- **PCF8575C: P-ports open-drain, NO internal pull-up, need external pull-up to VCC. VCC spec 4.5–5.5V.** `[verified: TI PCF8575C datasheet https://ti.com/document-viewer/PCF8575C/datasheet]`
+- **Open-Smart module: inputs need external pull-up (author uses 100 kΩ to VCC), button to GND.** `[verified: https://michiel.vanderwulp.be/domotica/Modules/IO-expander-PCF8575/]`
+- **Open-Smart module power: VCC → onboard 3.3V regulator → chip VDD (VCC-VDD pad open). Pad soldered = VDD tied to VCC.** `[verified: seller listing + vanderwulp page]`
+- **Regulator = AMS1117-3.3 (~1.1V dropout) → 3.3V on VCC gives only ~2.2V at chip. SDA/SCL header side pulled up 10 kΩ to VCC → never put 5V on VCC with an ESP32.** `[unverified — generic schematic text from operator, check regulator marking]`
+- **Firmware rule: never drive a P pin LOW if it can be tied to VCC (damages chip). Buttons-to-GND + write HIGH = safe.** `[verified: vanderwulp page]`
 - **Possible symptom of PCF8575 with VCC/GND open (hypothesis REJECTED on this unit, VCC=3.3V measured): still ACKs on I2C and sinks LOW (parasitic power via SDA/SCL clamp diodes), but inputs float.** `[unverified]`
-- **Observed on SAUCEDECK PCF (cause open): inputs toggle at 50 Hz untouched, driven-high bits sag, INT never fires.** `[verified: bench, docs/bringup/2026-10-04.log]`
+- **Observed on SAUCEDECK PCF (cause: PCF8575C open-drain, no pull-ups, + low VDD): inputs toggle at 50 Hz untouched, driven-high bits sag, INT never fires.** `[verified: bench, docs/bringup/2026-10-04.log]`
 - **Firmware power check: drive 0x00FF, read 5× over 100 ms. Healthy = stable. Decay / ERR = power starved OR external load on P lines.** `[verified: bench, 2026-10-04 — on this unit VCC measured 3.3V yet bits still sag, so not power alone]`
 
 ## EC11 rotary encoder

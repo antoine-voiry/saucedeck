@@ -40,3 +40,9 @@ Untouched 10 s: 0 toggles both encoders (no noise)                         PASS
 ENC1: operator CW then CCW -> decoded CW x5 then CCW x7                     PASS
 ENC2: operator CCW continuous 30 s -> decoded CCW only, 1238 toggles        PASS
 Bursts of ~5 counts per wrist twist (~90 deg) with ~19 toggles -> 4 transitions/detent fits.
+
+## PCF8575 root cause
+Short matrix (drive one pin low): no consistent followers -> no wire shorts. Pins read HIGH right after write, decay within ~20 ms -> no pull-up holding them.
+Chip marking: PCF8575CTS -> PCF8575C (open-drain P-ports, no internal pull-up, VCC 4.5-5.5V).
+Module: Open-Smart, VCC -> AMS1117-3.3 (unverified) -> VDD. With 3.3V on VCC, chip VDD likely ~2.2V.
+Fix plan: 3V3 to VDD (or bridge VCC-VDD pad), add 16x 10k pull-ups P00-P17 to 3V3. Never 5V on VCC (SDA/SCL pulled to VCC).
