@@ -69,3 +69,8 @@ No BGR/inversion fix needed (INVON + MADCTL 0x00 correct).
 - 16x 10k pull-ups on PCF P00-P17 -> then button test
 - PCF INT never fired (recheck after pull-ups)
 - BL to GPIO14 PWM: measure BL current first
+
+## Button press test without pull-ups (operator pressed 1->12 + knobs, 30 s)
+Plain monitor: 10204 events, pins float LOW for seconds untouched (P13 15 s) -> presses not separable from noise. INT 0 edges.
+Refresh-read workaround (write 0xFFFF before every read): pins still drop LOW within ms untouched -> FAIL, removed.
+Conclusion: no software workaround. 16x 10k pull-ups required before any button test.
