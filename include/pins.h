@@ -7,9 +7,10 @@
 #define PCF_INT_PIN        13
 #define PCF_I2C_ADDR     0x20
 
-// ST7789 LCD (SPI)
-#define TFT_SCL_PIN        12
-#define TFT_SDA_PIN        11
+// ST7789 LCD (SPI). BL tied to 3V3 (always on).
+// Bench-verified 2026-10-04 (bringup 'q'): SCK/MOSI not on FSPI IO_MUX pins -> GPIO matrix, <=40 MHz
+#define TFT_SCL_PIN        11
+#define TFT_SDA_PIN        12
 #define TFT_CS_PIN          9
 #define TFT_DC_PIN         10
 #define TFT_RST_PIN         8

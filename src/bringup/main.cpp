@@ -128,27 +128,31 @@ static void checkIdle(bool pcfOk) {
 
 // ---------- ST7789 (minimal driver, write-only SPI) ----------
 
-static const SPISettings kTftSpi(20000000, MSBFIRST, SPI_MODE0);
+// Runtime-tunable so the bench can try SPI mode / pin variants.
+static uint8_t tftCs = TFT_CS_PIN, tftDc = TFT_DC_PIN;
+static uint8_t tftSck = TFT_SCL_PIN, tftMosi = TFT_SDA_PIN;
+static SPISettings tftSpi(20000000, MSBFIRST, SPI_MODE0);
 
 static void tftCmd(uint8_t cmd, const uint8_t *data = nullptr, size_t n = 0) {
-  SPI.beginTransaction(kTftSpi);
-  digitalWrite(TFT_CS_PIN, LOW);
-  digitalWrite(TFT_DC_PIN, LOW);
+  SPI.beginTransaction(tftSpi);
+  digitalWrite(tftCs, LOW);
+  digitalWrite(tftDc, LOW);
   SPI.write(cmd);
   if (n) {
-    digitalWrite(TFT_DC_PIN, HIGH);
+    digitalWrite(tftDc, HIGH);
     SPI.writeBytes(data, n);
   }
-  digitalWrite(TFT_CS_PIN, HIGH);
+  digitalWrite(tftCs, HIGH);
   SPI.endTransaction();
 }
 
 static void tftInit() {
-  pinMode(TFT_CS_PIN, OUTPUT);
-  pinMode(TFT_DC_PIN, OUTPUT);
+  pinMode(tftCs, OUTPUT);
+  pinMode(tftDc, OUTPUT);
   pinMode(TFT_RST_PIN, OUTPUT);
-  digitalWrite(TFT_CS_PIN, HIGH);
-  SPI.begin(TFT_SCL_PIN, -1, TFT_SDA_PIN, -1);  // no MISO: GPIO13 belongs to PCF INT
+  digitalWrite(tftCs, HIGH);
+  SPI.end();  // begin() is a no-op once initialized; re-init so pin variants apply
+  SPI.begin(tftSck, -1, tftMosi, -1);  // no MISO: GPIO13 belongs to PCF INT
 
   digitalWrite(TFT_RST_PIN, HIGH); delay(10);
   digitalWrite(TFT_RST_PIN, LOW);  delay(20);
@@ -170,14 +174,42 @@ static void tftFill(uint16_t color) {
   for (size_t i = 0; i < sizeof row; i += 2) { row[i] = color >> 8; row[i + 1] = color & 0xFF; }
   tftCmd(0x2A, caset, 4);
   tftCmd(0x2B, raset, 4);
-  SPI.beginTransaction(kTftSpi);
-  digitalWrite(TFT_CS_PIN, LOW);
-  digitalWrite(TFT_DC_PIN, LOW);
+  SPI.beginTransaction(tftSpi);
+  digitalWrite(tftCs, LOW);
+  digitalWrite(tftDc, LOW);
   SPI.write(0x2C);                   // RAMWR
-  digitalWrite(TFT_DC_PIN, HIGH);
+  digitalWrite(tftDc, HIGH);
   for (int y = 0; y < 320; y++) SPI.writeBytes(row, sizeof row);
-  digitalWrite(TFT_CS_PIN, HIGH);
+  digitalWrite(tftCs, HIGH);
   SPI.endTransaction();
+}
+
+// Try SPI mode x CS/DC order at 4 MHz; each variant paints its own color for 3 s.
+static void cmdLcdVariants(bool swapClkData) {
+  tftSck = swapClkData ? TFT_SDA_PIN : TFT_SCL_PIN;
+  tftMosi = swapClkData ? TFT_SCL_PIN : TFT_SDA_PIN;
+  Serial.printf("SCK=GPIO%u MOSI=GPIO%u\n", tftSck, tftMosi);
+  struct Variant { uint8_t mode; bool swap; uint16_t color; const char *name; };
+  static const Variant kVariants[] = {
+      {SPI_MODE0, false, 0xF800, "1 mode0 CS=pins.h      RED (inverted: cyan)"},
+      {SPI_MODE3, false, 0x07E0, "2 mode3 CS=pins.h      GREEN (inverted: magenta)"},
+      {SPI_MODE0, true, 0x001F, "3 mode0 CS/DC swapped  BLUE (inverted: yellow)"},
+      {SPI_MODE3, true, 0xFFFF, "4 mode3 CS/DC swapped  WHITE (inverted: black)"},
+  };
+  for (const Variant &v : kVariants) {
+    tftCs = v.swap ? TFT_DC_PIN : TFT_CS_PIN;
+    tftDc = v.swap ? TFT_CS_PIN : TFT_DC_PIN;
+    tftSpi = SPISettings(4000000, MSBFIRST, v.mode);
+    Serial.printf("variant %s\n", v.name);
+    tftInit();
+    tftFill(v.color);
+    delay(3000);
+  }
+  tftCs = TFT_CS_PIN;
+  tftDc = TFT_DC_PIN;
+  tftSck = TFT_SCL_PIN;
+  tftMosi = TFT_SDA_PIN;
+  tftSpi = SPISettings(20000000, MSBFIRST, SPI_MODE0);
 }
 
 static bool checkLcd() {
@@ -191,7 +223,7 @@ static bool checkLcd() {
   if (askYesNo("Saw 5 full-screen colors?")) { Serial.println("PASS"); return true; }
   Serial.println("FAIL hints:");
   Serial.println("  backlight off -> VCC/GND");
-  Serial.println("  backlight on, no image -> RST=GPIO8, CS=GPIO9, DC=GPIO10, SDA=GPIO11, SCL=GPIO12");
+  Serial.println("  backlight on, no image -> RST=GPIO8, DC=GPIO9, CS=GPIO10, SDA=GPIO11, SCL=GPIO12");
   Serial.println("  image but wrong colors -> wiring OK, inversion/RGB order fix in firmware");
   return false;
 }
@@ -474,6 +506,37 @@ static void cmdToggleSpeed() {
   Serial.printf("I2C clock now %lu Hz\n", (unsigned long)i2cHz);
 }
 
+// Candidate config found on bench: CS/DC and SCK/MOSI both reversed vs pins.h, SPI mode 3.
+static void cmdLcdCandidate() {
+  tftCs = TFT_DC_PIN;
+  tftDc = TFT_CS_PIN;
+  tftSck = TFT_SDA_PIN;
+  tftMosi = TFT_SCL_PIN;
+  tftSpi = SPISettings(4000000, MSBFIRST, SPI_MODE3);
+  Serial.printf("CS=GPIO%u DC=GPIO%u SCK=GPIO%u MOSI=GPIO%u mode3: RED GREEN BLUE WHITE 2 s each\n",
+                tftCs, tftDc, tftSck, tftMosi);
+  tftInit();
+  for (uint16_t c : {0xF800, 0x07E0, 0x001F, 0xFFFF}) {
+    tftFill(c);
+    delay(2000);
+  }
+}
+
+// Hold one solid color (candidate config, no re-init after first call): 1=red 2=green 3=blue
+static void cmdLcdSolid(uint16_t color) {
+  static bool ready = false;
+  if (!ready || tftCs != TFT_DC_PIN) {
+    tftCs = TFT_DC_PIN;
+    tftDc = TFT_CS_PIN;
+    tftSck = TFT_SDA_PIN;
+    tftMosi = TFT_SCL_PIN;
+    tftSpi = SPISettings(4000000, MSBFIRST, SPI_MODE3);
+    tftInit();
+    ready = true;
+  }
+  tftFill(color);
+}
+
 static void cmdLcd() {
   Serial.println("LCD: RED, GREEN, BLUE, WHITE 1.5 s each, then stays WHITE");
   tftInit();
@@ -495,7 +558,7 @@ static void cmdLed() {
 static void printHelp() {
   Serial.println("Commands: i=I2C+idle  p=snapshot  m=monitor 10s  M=monitor 30s");
   Serial.println("          l=LCD colors  w=LED1 colors  o=LED1 off  k=LCD black  g=guided full test");
-  Serial.println("          s=I2C scan  r=PCF write+10 reads  f=toggle I2C 400k/100k  z=PCF drive patterns  x=PCF short matrix");
+  Serial.println("          s=I2C scan  r=PCF write+10 reads  f=toggle I2C 400k/100k  z=PCF drive patterns  x=PCF short matrix  v/V=LCD SPI variants (V: SCK/MOSI swapped)");
 }
 
 void setup() {
@@ -522,6 +585,12 @@ void loop() {
     case 'm': cmdMonitor(10000); break;
     case 'M': cmdMonitor(30000); break;
     case 'l': cmdLcd(); break;
+    case 'q': cmdLcdCandidate(); break;
+    case '1': cmdLcdSolid(0xF800); break;
+    case '2': cmdLcdSolid(0x07E0); break;
+    case '3': cmdLcdSolid(0x001F); break;
+    case 'v': cmdLcdVariants(false); break;
+    case 'V': cmdLcdVariants(true); break;
     case 'k': tftInit(); tftFill(0x0000); break;
     case 'w': cmdLed(); break;
     case 'o': rgbLedWrite(LED_DATA_PIN, 0, 0, 0); break;
