@@ -438,6 +438,36 @@ static void cmdPattern(uint16_t pattern) {
   pcfAllInputs();
 }
 
+// Drive one pin low at a time; any other pin reading low is coupled (short/bridge/load).
+static void cmdShortMatrix() {
+  auto writePcf = [](uint16_t v) {
+    Wire.beginTransmission(PCF_I2C_ADDR);
+    Wire.write(v & 0xFF);
+    Wire.write(v >> 8);
+    return Wire.endTransmission();
+  };
+  writePcf(0xFFFF);
+  delay(50);
+  uint16_t base = 0;
+  pcfRead(base);
+  Serial.printf("baseline all-high: %04X\n", base);
+  for (uint8_t i = 0; i < 16; i++) {
+    writePcf(0xFFFF & ~(1u << i));
+    delay(5);
+    uint16_t a = 0, b = 0;
+    bool ok = pcfRead(a);
+    delay(20);
+    ok = ok && pcfRead(b);
+    uint16_t followers = ~(a | b) & ~(1u << i) & base;  // low now, high at baseline
+    Serial.printf("%s low -> read %04X/%04X", pcfPinName(i), a, b);
+    if (!ok) Serial.print("  ERR");
+    for (uint8_t j = 0; j < 16; j++)
+      if (followers & (1u << j)) Serial.printf("  +%s", pcfPinName(j));
+    Serial.println();
+  }
+  writePcf(0xFFFF);
+}
+
 static void cmdToggleSpeed() {
   i2cHz = i2cHz == 400000 ? 100000 : 400000;
   Wire.setClock(i2cHz);
@@ -465,7 +495,7 @@ static void cmdLed() {
 static void printHelp() {
   Serial.println("Commands: i=I2C+idle  p=snapshot  m=monitor 10s  M=monitor 30s");
   Serial.println("          l=LCD colors  w=LED1 colors  o=LED1 off  k=LCD black  g=guided full test");
-  Serial.println("          s=I2C scan  r=PCF write+10 reads  f=toggle I2C 400k/100k  z=PCF drive patterns");
+  Serial.println("          s=I2C scan  r=PCF write+10 reads  f=toggle I2C 400k/100k  z=PCF drive patterns  x=PCF short matrix");
 }
 
 void setup() {
@@ -499,6 +529,7 @@ void loop() {
     case 's': cmdScan(); break;
     case 'r': cmdReadBurst(); break;
     case 'f': cmdToggleSpeed(); break;
+    case 'x': cmdShortMatrix(); break;
     case 'z': cmdPattern(0x0000); cmdPattern(0xFF00); cmdPattern(0x00FF); cmdPattern(0xFFFF); break;
     case 'h': case '?': printHelp(); break;
     default: return;  // ignore CR/LF and noise
