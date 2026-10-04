@@ -16,7 +16,8 @@
 
 ## WS2812B
 - **VIH min = 0.7 × VDD → 3.5V at 5V supply.** 3.3V data marginal. `[verified: WS2812B datasheet]`
-- **SAUCEDECK build: strip powered from 5V VBUS, bulk cap across 5V/GND, series resistor on DIN. No level shifter.** Values TBD. `[verified: user report, 2026-10-04]`
+- **SAUCEDECK build: strip powered from 5V VBUS, bulk cap across 5V/GND, series resistor on DIN. No level shifter. Cap = 470 nF, resistor = 470 Ω.** `[verified: user report, 2026-10-04]`
+- **470 nF only filters high-frequency noise; it cannot cover LED inrush/PWM current steps. Bulk cap should be 100–1000 µF electrolytic (≥6.3V) at strip input, in parallel with the 470 nF.** `[verified: Adafruit NeoPixel Überguide, best practices]`
 - **Bulk cap (typ. 100–1000 µF) absorbs inrush; series resistor (typ. 220–470 Ω) damps ringing on DIN. Neither fixes 3.3V→VIH margin.** `[verified: Adafruit NeoPixel Überguide, best practices]`
 - **Cheap margin fix without shifter: power first LED from 5V via 1N4148/1N4001 drop (~4.3V → VIH ≈ 3.0V), it re-drives clean 5V data to rest.** `[unverified — bench check]`
 - **~60 mA per LED full white.** `[verified: common datasheet figure, approx]`

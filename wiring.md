@@ -59,9 +59,9 @@ All switch terminals short to **GND** when pressed.
 
 | Strip Pin | Connected To | Notes |
 | :--- | :--- | :--- |
-| **5V** | ESP32 `5V / VBUS` | Bulk capacitor across 5V/GND at strip input (value TBD) |
+| **5V** | ESP32 `5V / VBUS` | 470 nF capacitor across 5V/GND at strip input — too small for bulk, see kb |
 | **GND** | System Common `GND` | |
-| **DIN** | ESP32 `GPIO 7` via series resistor | Resistor value TBD; place close to strip DIN |
+| **DIN** | ESP32 `GPIO 7` via series resistor | 470 Ω series resistor; place close to strip DIN |
 
 > Data level: 3.3V GPIO vs 3.5V VIH min at 5V supply — marginal, no level shifter fitted. See `docs/kb/peripherals.md`.
 
