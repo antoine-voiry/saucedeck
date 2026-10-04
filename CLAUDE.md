@@ -34,28 +34,39 @@ Red → green → refactor. No production logic without a failing test first.
 
 Layout:
 - `lib/deck_core/` — hardware-free logic (decoders, debounce, keymaps, state machines, protocol). No `Arduino.h`. Pure C++17.
-- `test/test_native/` — Unity tests for `deck_core`, run on host.
+- `test/native/<suite>/` — Unity tests for `deck_core`, run on host. One suite per module (`test_core`, `test_bringup`).
 - `src/` — thin hardware glue only: pin I/O, USB, I2C, SPI calls into `deck_core`. Keep logic out of here.
+- `src/bringup/` — wiring test firmware (`bringup` env). Excluded from production build.
 
 Loop per change:
-1. Write failing test in `test/test_native/`. Run, confirm it fails for the right reason.
+1. Write failing test in `test/native/<suite>/`. Run, confirm it fails for the right reason.
 2. Minimal code in `lib/deck_core/` to pass.
 3. Refactor, tests stay green.
 4. Wire into `src/` and confirm firmware builds.
 
 Bug fix = reproduce in failing test first.
-Hardware-only behavior (USB enumeration, signal timing, LED levels) can't be unit tested → write bench test steps in PR/commit, mark "bench-verified" or "not bench-verified".
+Hardware-only behavior (USB enumeration, signal timing, LED levels) can't be unit tested → cover it in bring-up firmware or write bench steps in commit, mark "bench-verified" or "not bench-verified".
+
+## Bring-up (wiring test)
+
+Any wiring change → rerun bring-up before trusting firmware.
+- Auto checks: PCF8575 ACK (+ bus scan), idle levels (stuck pins), INT idle, encoder idle A/B.
+- Operator checks (y/n): LCD 5-color fill (minimal ST7789 driver, MISO -1), first LED R/G/B.
+- Guided controls: 12 keys, 2 knob switches, each encoder CW + CCW. Judged by `BringupSequencer` (tested). Fail text names likely cause (crossed wire, short, A/B swapped, dead phase, INT dead).
+- Save log in `docs/bringup/YYYY-MM-DD.log`. Feed confirmed facts into `docs/kb/`.
+- New wire/peripheral → add step to `kSteps` in `src/bringup/main.cpp` (+ tests if judging logic changes).
 
 ## Commands
 
 ```sh
 pio test -e native          # unit tests (host). Must pass before any commit.
 pio run                     # build firmware (env: saucedeck)
+pio run -e bringup -t upload && pio device monitor   # wiring test
 pio run -t upload           # flash. If no port: hold BOOT, plug USB, release.
 pio device monitor          # serial over USB CDC, 115200
 ```
 
-Done = `pio test -e native` green AND `pio run` SUCCESS with zero new warnings. Show output, don't claim.
+Done = `pio test -e native` green AND `pio run -e saucedeck -e bringup` SUCCESS with zero new warnings. Show output, don't claim.
 
 ## Platform
 
