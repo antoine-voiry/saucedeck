@@ -53,6 +53,7 @@ Any wiring change → rerun bring-up before trusting firmware.
 - Auto checks: PCF8575 ACK (+ bus scan), idle levels (stuck pins), INT idle, encoder idle A/B.
 - Operator checks (y/n): LCD 5-color fill (minimal ST7789 driver, MISO -1), first LED R/G/B.
 - Guided controls: 12 keys, 2 knob switches, each encoder CW + CCW. Judged by `BringupSequencer` (tested). Fail text names likely cause (crossed wire, short, A/B swapped, dead phase, INT dead).
+- Host-driven mode: `~/.platformio/penv/bin/python tools/bench.py <cmd>` (h = help). One command per call, reply ends at `OK>`. Use for Claude-led bench sessions: run cmd, then ask operator what they see. Sync timed windows with a "Go" question BEFORE starting monitor.
 - Save log in `docs/bringup/YYYY-MM-DD.log`. Feed confirmed facts into `docs/kb/`.
 - New wire/peripheral → add step to `kSteps` in `src/bringup/main.cpp` (+ tests if judging logic changes).
 
@@ -62,7 +63,7 @@ Any wiring change → rerun bring-up before trusting firmware.
 pio test -e native          # unit tests (host). Must pass before any commit.
 pio run                     # build firmware (env: saucedeck)
 pio run -e bringup -t upload && pio device monitor   # wiring test
-pio run -t upload           # flash. If no port: hold BOOT, plug USB, release.
+pio run -t upload           # flash. Auto-reset via 1200bps touch. Dead board: hold BOOT, plug USB, release.
 pio device monitor          # serial over USB CDC, 115200
 ```
 

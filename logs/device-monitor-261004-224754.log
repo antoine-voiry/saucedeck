@@ -1,0 +1,38 @@
+SAUCEDECK bring-up ready. Press any key to start.
+
+######## SAUCEDECK BRING-UP ########
+
+== I2C / PCF8575 ==
+PASS: PCF8575 ACK at 0x20
+
+== Idle levels (touch nothing) ==
+FAIL: P00 stuck LOW - short to GND, wrong switch wiring, or held
+FAIL: P01 stuck LOW - short to GND, wrong switch wiring, or held
+FAIL: P02 stuck LOW - short to GND, wrong switch wiring, or held
+FAIL: P04 stuck LOW - short to GND, wrong switch wiring, or held
+FAIL: P05 stuck LOW - short to GND, wrong switch wiring, or held
+FAIL: P06 stuck LOW - short to GND, wrong switch wiring, or held
+FAIL: P07 stuck LOW - short to GND, wrong switch wiring, or held
+FAIL: P12 stuck LOW - short to GND, wrong switch wiring, or held
+FAIL: P14 stuck LOW - short to GND, wrong switch wiring, or held
+FAIL: P15 stuck LOW - short to GND, wrong switch wiring, or held
+FAIL: P16 stuck LOW - short to GND, wrong switch wiring, or held
+FAIL: P17 stuck LOW - short to GND, wrong switch wiring, or held
+PASS: INT (GPIO13) idle HIGH
+INFO: encoder 1 idle A=1 B=1 (GPIO2/GPIO3)
+INFO: encoder 2 idle A=1 B=1 (GPIO4/GPIO5)
+
+== LCD (ST7789) ==
+Watch screen: RED, GREEN, BLUE, WHITE, BLACK (1 s each)
+Saw 5 full-screen colors? [y/n] n
+FAIL hints:
+  backlight off -> VCC/GND
+  backlight on, no image -> RST=GPIO8, CS=GPIO9, DC=GPIO10, SDA=GPIO11, SCL=GPIO12
+  image but wrong colors -> wiring OK, inversion/RGB order fix in firmware
+
+== LED strip (first LED only) ==
+Watch first LED: RED, GREEN, BLUE (1 s each, low brightness)
+First LED showed red, green, blue in that order? [y/n] y
+PASS
+
+== Controls (s = skip step) ==
