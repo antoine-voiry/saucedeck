@@ -1,8 +1,8 @@
-# ESP32-S3-Zero Macro Deck Pinout Mapping
+# ESP32-S3 SuperMini Macro Deck Pinout Mapping
 
 ---
 
-## 1. ESP32-S3-Zero Board Pinout
+## 1. ESP32-S3 SuperMini Board Pinout
 
 | Pin / Pad | Destination Signal / Device | Bus / Protocol | Notes |
 | :--- | :--- | :--- | :--- |
@@ -21,13 +21,14 @@
 | **GPIO 10** | LCD — `DC` | SPI Control | ST7789 Data / Command select |
 | **GPIO 11** | LCD — `SCL` (SCK) | SPI Clock | Master Clock (GPIO matrix, ≤40 MHz) |
 | **GPIO 12** | LCD — `SDA` (MOSI) | SPI Master Out | Master Out Slave In |
-| **GPIO 13** | PCF8575 — `INT` | Direct GPIO | Active-Low interrupt (`INPUT_PULLUP`) |
+| **GPIO 13** | PCF8575 — `INT` | Direct GPIO | Active-Low interrupt (`INPUT_PULLUP`). Never fired on bench — wire suspect, unused by firmware |
+| **GPIO 44 (RX)** | Shared button return (all 12 button commons) | Direct GPIO | `INPUT_PULLUP`. Column scan sense line — commons NOT on GND |
 
 ---
 
 ## 2. PCF8575 I/O Expander Mapping
 
-All switch terminals short to **GND** when pressed.
+Chip fitted is a **PCF8575C** (open-drain, no internal pull-ups). Buttons are **column-scanned**: firmware drives one P pin LOW at a time; button commons join on **GPIO 44** (`INPUT_PULLUP`), which reads LOW when the driven pin's button is pressed. Button commons must **not** be tied to GND.
 
 | PCF8575 Pin | Connected Switch / Function | Mapping Detail |
 | :--- | :--- | :--- |

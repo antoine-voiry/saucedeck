@@ -5,6 +5,7 @@
 #include "USBHIDConsumerControl.h"
 #include "pins.h"
 #include "button_diff.h"
+#include "column_scanner.h"
 #include "quad_decoder.h"
 
 USBHIDKeyboard Keyboard;
@@ -16,19 +17,24 @@ static const uint8_t kButtonKeys[12] = {
     KEY_F19, KEY_F20, KEY_F21, KEY_F22, KEY_F23, KEY_F24,
 };
 
-static uint16_t lastPcf = 0xFFFF;
+static ColumnScanner scanner(0xFFFF);
+static uint16_t lastPressed = 0;
 
-static uint16_t readPcf() {
-  if (Wire.requestFrom((uint8_t)PCF_I2C_ADDR, (uint8_t)2) != 2) return lastPcf;
-  uint16_t lo = Wire.read();
-  uint16_t hi = Wire.read();
-  return (hi << 8) | lo;
+static void pcfWrite(uint16_t v) {
+  Wire.beginTransmission(PCF_I2C_ADDR);
+  Wire.write(v & 0xFF);
+  Wire.write(v >> 8);
+  Wire.endTransmission();
 }
 
-static void pollButtons() {
-  uint16_t now = readPcf();
-  ButtonEvents ev = diffButtons(lastPcf, now);
-  lastPcf = now;
+// One column per call; I2C write (~70 us) doubles as settle time for the sense line.
+static void scanButtons() {
+  pcfWrite(scanner.driveWord());
+  if (!scanner.feed(digitalRead(BTN_SENSE_PIN) == LOW)) return;
+
+  uint16_t now = scanner.pressed();
+  ButtonEvents ev = diffButtons(~lastPressed, ~now);  // diffButtons expects active-low
+  lastPressed = now;
 
   for (int i = 0; i < 12; i++) {
     uint16_t bit = 1u << i;
@@ -51,11 +57,8 @@ void setup() {
   Serial.begin(115200);
 
   Wire.begin(I2C_SDA_PIN, I2C_SCL_PIN, 400000);
-  Wire.beginTransmission(PCF_I2C_ADDR);  // all pins high = inputs
-  Wire.write(0xFF);
-  Wire.write(0xFF);
-  Wire.endTransmission();
-  pinMode(PCF_INT_PIN, INPUT_PULLUP);
+  pcfWrite(0xFFFF);  // all released
+  pinMode(BTN_SENSE_PIN, INPUT_PULLUP);
 
   for (uint8_t pin : {ENC1_PHASE_A_PIN, ENC1_PHASE_B_PIN, ENC2_PHASE_A_PIN, ENC2_PHASE_B_PIN})
     pinMode(pin, INPUT_PULLUP);
@@ -64,7 +67,7 @@ void setup() {
 }
 
 void loop() {
-  if (digitalRead(PCF_INT_PIN) == LOW) pollButtons();
+  scanButtons();
 
   // Encoder 1 -> volume, encoder 2 -> next/previous track
   int d1 = enc1.step(digitalRead(ENC1_PHASE_A_PIN), digitalRead(ENC1_PHASE_B_PIN));
