@@ -1,6 +1,6 @@
 # SAUCEDECK
 
-USB HID macro deck. ESP32-S3-Zero (Waveshare, ESP32-S3FH4R2). Enumerates on Mac/PC as `SAUCEDECK`.
+USB HID macro deck. ESP32-S3 SuperMini (chip/flash/PSRAM variant unverified, see docs/kb/esp32s3.md). Enumerates on Mac/PC as `SAUCEDECK`.
 12 keys + 2 EC11 encoders (via PCF8575 + direct GPIO), ST7789 2" LCD, WS2812B strip.
 Pinout source of truth: [wiring.md](wiring.md) → mirrored in [include/pins.h](include/pins.h). Change both or neither.
 
@@ -83,7 +83,9 @@ Done = `pio test -e native` green AND `pio run -e saucedeck -e bringup` SUCCESS 
 - LCD SCK=GPIO11, MOSI=GPIO12 (bench-verified, reversed vs FSPI IO_MUX) → GPIO matrix, keep SPI ≤40 MHz.
 - PCF8575 module carries a PCF8575C: open-drain, NO internal pull-ups → needs external 10k on every input. VDD jumpered to 3V3. Never 5V on module VCC.
 - GPIO19/20 = USB D-/D+. GPIO26–32 = in-package flash/PSRAM. Never touch.
-- GPIO21 = onboard WS2812 on S3-Zero.
+- SuperMini: very few free pins. Only U0RXD (GPIO44, now button sense) and U0TXD (GPIO43, boot log output, avoid) left.
+- Buttons are column-scanned (`ColumnScanner`): PCF pin LOW one at a time, shared return on GPIO44 INPUT_PULLUP. Button commons must NOT go to GND.
+- Uploads locked to `/dev/cu.usbmodem*`: a CH9102 ESP32 board often sits on the same desk.
 - WS2812B strip at 5V: VIH min 0.7×VDD = 3.5V > 3.3V GPIO out. Marginal. Recommend 74AHCT1G125 level shifter.
 - USB power budget 500 mA. Cap LED brightness in firmware.
 - All GPIO 3.3V only, not 5V tolerant.

@@ -10,6 +10,8 @@
 - **Open-Smart module: inputs need external pull-up (author uses 100 kΩ to VCC), button to GND.** `[verified: https://michiel.vanderwulp.be/domotica/Modules/IO-expander-PCF8575/]`
 - **Open-Smart module power: VCC → onboard 3.3V regulator → chip VDD (VCC-VDD pad open). Pad soldered = VDD tied to VCC.** `[verified: seller listing + vanderwulp page]`
 - **Regulator = AMS1117-3.3 (~1.1V dropout) → 3.3V on VCC gives only ~2.2V at chip. SDA/SCL header side pulled up 10 kΩ to VCC → never put 5V on VCC with an ESP32.** `[unverified — generic schematic text from operator, check regulator marking]`
+- **Workaround without pull-ups: column scan. PCF8575C sinks LOW strongly; drive one P pin LOW at a time, buttons' common to one MCU GPIO with internal pull-up. Floating released pins can't pull the sense line down.** `[unverified — bench pending, 2026-10-05]`
+- **Refresh-read (write 0xFFFF then read immediately) does NOT work on PCF8575C: pins fall LOW within ms untouched.** `[verified: bench, 2026-10-04]`
 - **Firmware rule: never drive a P pin LOW if it can be tied to VCC (damages chip). Buttons-to-GND + write HIGH = safe.** `[verified: vanderwulp page]`
 - **Possible symptom of PCF8575 with VCC/GND open (hypothesis REJECTED on this unit, VCC=3.3V measured): still ACKs on I2C and sinks LOW (parasitic power via SDA/SCL clamp diodes), but inputs float.** `[unverified]`
 - **Observed on SAUCEDECK PCF (cause: PCF8575C open-drain, no pull-ups, + low VDD): inputs toggle at 50 Hz untouched, driven-high bits sag, INT never fires.** `[verified: bench, docs/bringup/2026-10-04.log]`

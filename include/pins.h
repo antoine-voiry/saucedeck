@@ -6,6 +6,10 @@
 #define I2C_SCL_PIN         6
 #define PCF_INT_PIN        13
 #define PCF_I2C_ADDR     0x20
+// Shared button return line (U0RXD, free: Serial runs over USB CDC). INPUT_PULLUP.
+// PCF8575C is open-drain with no pull-ups, so buttons are column-scanned:
+// one PCF pin driven LOW at a time, this pin reads LOW if that button is pressed.
+#define BTN_SENSE_PIN      44
 
 // ST7789 LCD (SPI). BL tied to 3V3 (always on).
 // Bench-verified 2026-10-04 (bringup 'q'): SCK/MOSI not on FSPI IO_MUX pins -> GPIO matrix, <=40 MHz

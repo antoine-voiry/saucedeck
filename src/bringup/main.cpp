@@ -5,6 +5,7 @@
 #include <Wire.h>
 #include "bringup.h"
 #include "pins.h"
+#include "column_scanner.h"
 #include "quad_decoder.h"
 
 static const uint32_t kStepTimeoutMs = 20000;
@@ -500,6 +501,34 @@ static void cmdShortMatrix() {
   writePcf(0xFFFF);
 }
 
+// Column scan (PCF8575C without pull-ups): print button edges for `ms`.
+static void cmdColumnScan(uint32_t ms) {
+  Serial.printf("Column scan %lu s, sense GPIO%u (idle=%d)...\n", (unsigned long)(ms / 1000), BTN_SENSE_PIN,
+                digitalRead(BTN_SENSE_PIN));
+  ColumnScanner scan(0xFFFF);
+  uint16_t last = 0;
+  uint32_t scans = 0, start = millis();
+  while (millis() - start < ms) {
+    Wire.beginTransmission(PCF_I2C_ADDR);
+    uint16_t w = scan.driveWord();
+    Wire.write(w & 0xFF);
+    Wire.write(w >> 8);
+    Wire.endTransmission();
+    if (!scan.feed(digitalRead(BTN_SENSE_PIN) == LOW)) continue;
+    scans++;
+    uint16_t now = scan.pressed();
+    ButtonEvents ev = diffButtons(~last, ~now);
+    for (uint8_t i = 0; i < 16; i++) {
+      unsigned long t = millis() - start;
+      if (ev.pressed & (1u << i)) Serial.printf("%6lu ms  %s (button %u) DOWN\n", t, pcfPinName(i), i + 1u);
+      if (ev.released & (1u << i)) Serial.printf("%6lu ms  %s (button %u) UP\n", t, pcfPinName(i), i + 1u);
+    }
+    last = now;
+  }
+  pcfAllInputs();
+  Serial.printf("%lu full scans (%.2f ms/scan)\n", (unsigned long)scans, scans ? (double)ms / scans : 0.0);
+}
+
 static void cmdToggleSpeed() {
   i2cHz = i2cHz == 400000 ? 100000 : 400000;
   Wire.setClock(i2cHz);
@@ -558,7 +587,7 @@ static void cmdLed() {
 static void printHelp() {
   Serial.println("Commands: i=I2C+idle  p=snapshot  m=monitor 10s  M=monitor 30s");
   Serial.println("          l=LCD colors  w=LED1 colors  o=LED1 off  k=LCD black  g=guided full test");
-  Serial.println("          s=I2C scan  r=PCF write+10 reads  f=toggle I2C 400k/100k  z=PCF drive patterns  x=PCF short matrix  v/V=LCD SPI variants (V: SCK/MOSI swapped)");
+  Serial.println("          s=I2C scan  r=PCF write+10 reads  f=toggle I2C 400k/100k  z=PCF drive patterns  x=PCF short matrix  c=button column scan 30s  v/V=LCD SPI variants (V: SCK/MOSI swapped)");
 }
 
 void setup() {
@@ -567,6 +596,7 @@ void setup() {
 
   Wire.begin(I2C_SDA_PIN, I2C_SCL_PIN, 400000);
   pinMode(PCF_INT_PIN, INPUT_PULLUP);
+  pinMode(BTN_SENSE_PIN, INPUT_PULLUP);
   for (auto &pins : kEncPins)
     for (uint8_t pin : pins) pinMode(pin, INPUT_PULLUP);
   pcfAllInputs();
@@ -599,6 +629,7 @@ void loop() {
     case 'r': cmdReadBurst(); break;
     case 'f': cmdToggleSpeed(); break;
     case 'x': cmdShortMatrix(); break;
+    case 'c': cmdColumnScan(30000); break;
     case 'z': cmdPattern(0x0000); cmdPattern(0xFF00); cmdPattern(0x00FF); cmdPattern(0xFFFF); break;
     case 'h': case '?': printHelp(); break;
     default: return;  // ignore CR/LF and noise
