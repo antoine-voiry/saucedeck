@@ -1,0 +1,81 @@
+SAUCEDECK bring-up — 2026-10-18 (host-driven via tools/bench.py, bringup firmware)
+
+== Rework before / during session ==
+- Board rebuilt on perfboard from the other session's wiring list (SauceDeck-perfboard-wiring.pdf
+  + pasted list). New pin map: see wiring.md.
+- Expander changed: PCF8575C module -> Waveshare MCP23017 board (0x27, A0-A2 open).
+- First solder had MCP INTA -> GPIO5 and INTB -> U0TXD (GPIO43). Both desoldered (INTB was
+  fighting the ROM boot log on TX).
+- Mid-session: operator reseated module wires/header -> fixed I2C (see below).
+
+== I2C / MCP23017 — before reseat ==
+cmd d (probe 0x20-0x27 x40, sweep idle gap between probes):
+gap     0 us, ACKs/40: 27:40
+gap   100 us, ACKs/40: 27:40
+gap   300 us, ACKs/40: 27:40
+gap  1000 us, ACKs/40: 27:37
+gap  3000 us, ACKs/40: 27:0
+gap 10000 us, ACKs/40: 27:0
+gap 20000 us, ACKs/40: 27:0
+idle 10 ms, 3771 samples: SDA low 0, SCL low 0
+cmd e (bit-banged I2C, Wire released):
+bit-bang gap   0 ms: ACK 19/20
+bit-bang gap   5 ms: ACK 1/20
+bit-bang gap  20 ms: ACK 0/20
+bit-bang gap 100 ms: ACK 0/20
+-> fault independent of ESP I2C driver. Registers kept values (GPPUA stayed 0x7F).
+   GPB inputs without pull-ups toggled every 20 ms (50 Hz hum), operator touched nothing.
+
+== I2C / MCP23017 — after reseat ==
+GPPUA at entry = 7F (try 0)
+gap     0 us .. 20000 us: 27:40 at every gap
+bit-bang gap 0/5/20/100 ms: ACK 20/20
+== I2C / MCP23017 ==
+PASS: MCP23017 ACK at 0x27, init written
+== Idle levels (touch nothing) ==
+PASS: all 14 deck inputs HIGH (raw 0x7F7F)
+INFO: encoder 1 idle A=1 B=1
+INFO: encoder 2 idle A=1 B=1
+cmd r: 7F7F x10
+
+== LCD (cmd l) ==  PASS (operator): R, G, B, W full screen. BL driven from GPIO9.
+   BL current NOT measured.
+== LED (cmd w, o) == PASS (operator): first LED R, G, B, then white; off works.
+   (Before reseat one "off" was ignored; not reproduced after.)
+
+== Keys (cmd M, operator pressed physical positions 1->12, twice) ==
+Order seen: GPB0 GPB1 GPB2 GPB3 GPA4 GPA5 GPA6 GPB6 GPA3 GPA2 GPA1 GPA0
+-> all 12 keys clean, 1 DOWN/UP each, no bounce, no shorts.
+-> physical order != K labels from soldering list. Firmware remapped (mcp23017.cpp, tested).
+
+== Knobs ==
+Knob 1 press -> GPB4, knob 2 press -> GPB5. PASS.
+Knob 1 rotation arrived on GPIO3/4, knob 2 on GPIO1/2 (A/B pairs crossed vs list).
+-> pins.h swapped: ENC1 = GPIO3/4, ENC2 = GPIO1/2.
+Knob 1, 3 clicks CW slow: ENC CW x3. Knob 2, 3 CW + 3 CCW: CW x3, CCW x3. PASS.
+
+== Final check after remap (cmd M) ==
+   793 ms  GPB0 DOWN   (position 1)
+  ...      GPB1 GPB2 GPB3 GPA4 GPA5 GPA6 GPB6 GPA3 GPA2 GPA1
+  7408 ms  GPA0 DOWN   (position 12)
+  8475 ms  GPB4 DOWN   (knob 1)
+ 10419 ms  ENC1 CW  x3
+ 12794 ms  GPB5 DOWN   (knob 2)
+ 14652 ms  ENC2 CW  x2
+ENC1 toggles: A=8 B=6
+ENC2 toggles: A=5 B=6
+-> keys in order 1..12, knob 1 = ENC1, knob 2 = ENC2. PASS.
+   (knob 1: 3 counts for "2 clicks" asked; previous slow test exact — watch for over-count.)
+
+== Not done ==
+- HID firmware (src/main.cpp) not flashed / not tested on host -> next session.
+- LCD BL current measurement.
+- Full LED strip test (only first LED checked).
+
+== After mounting in enclosure (2026-10-18) ==
+Port: /dev/cu.usbmodem288485692A0C1 (enumerated after replug)
+i: PASS MCP23017 ACK 0x27 + init; all 14 inputs HIGH (0x7F7F); ENC1 A=1 B=1, ENC2 A=1 B=1
+l: LCD RED/GREEN/BLUE/WHITE -> operator: all OK
+w: LED1 R/G/B -> operator: all OK
+o: LED off
+Not yet re-run in enclosure: keys/knobs monitor (M)

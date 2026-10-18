@@ -57,7 +57,7 @@ void test_quad_two_detents_cw() {
   TEST_ASSERT_EQUAL_INT(2, feed(q, CW, 4) + feed(q, CW, 4));
 }
 
-// --- diffButtons: PCF8575 active-low, bit=0 means pressed ---
+// --- diffButtons: active-low, bit=0 means pressed ---
 
 void test_diff_no_change() {
   ButtonEvents e = diffButtons(0xFFFF, 0xFFFF);

@@ -5,7 +5,7 @@
 #include "USBHIDConsumerControl.h"
 #include "pins.h"
 #include "button_diff.h"
-#include "column_scanner.h"
+#include "mcp_io.h"
 #include "quad_decoder.h"
 
 USBHIDKeyboard Keyboard;
@@ -17,22 +17,15 @@ static const uint8_t kButtonKeys[12] = {
     KEY_F19, KEY_F20, KEY_F21, KEY_F22, KEY_F23, KEY_F24,
 };
 
-static ColumnScanner scanner(0xFFFF);
 static uint16_t lastPressed = 0;
+static bool mcpOk = false;
 
-static void pcfWrite(uint16_t v) {
-  Wire.beginTransmission(PCF_I2C_ADDR);
-  Wire.write(v & 0xFF);
-  Wire.write(v >> 8);
-  Wire.endTransmission();
-}
-
-// One column per call; I2C write (~70 us) doubles as settle time for the sense line.
 static void scanButtons() {
-  pcfWrite(scanner.driveWord());
-  if (!scanner.feed(digitalRead(BTN_SENSE_PIN) == LOW)) return;
+  uint16_t raw;
+  if (!mcpOk) mcpOk = mcpBegin();  // retry until the expander answers
+  if (!mcpOk || !mcpReadRaw(raw)) { mcpOk = false; return; }
 
-  uint16_t now = scanner.pressed();
+  uint16_t now = deckPressed(raw);
   ButtonEvents ev = diffButtons(~lastPressed, ~now);  // diffButtons expects active-low
   lastPressed = now;
 
@@ -42,8 +35,8 @@ static void scanButtons() {
     if (ev.released & bit) Keyboard.release(kButtonKeys[i]);
   }
   // Encoder push switches: mute (enc 1), play/pause (enc 2)
-  if (ev.pressed & PCF_MASK_ENC1_SW) { Consumer.press(CONSUMER_CONTROL_MUTE); Consumer.release(); }
-  if (ev.pressed & PCF_MASK_ENC2_SW) { Consumer.press(CONSUMER_CONTROL_PLAY_PAUSE); Consumer.release(); }
+  if (ev.pressed & DECK_ENC1_SW) { Consumer.press(CONSUMER_CONTROL_MUTE); Consumer.release(); }
+  if (ev.pressed & DECK_ENC2_SW) { Consumer.press(CONSUMER_CONTROL_PLAY_PAUSE); Consumer.release(); }
 }
 
 static QuadDecoder enc1(1, 1), enc2(1, 1);
@@ -57,8 +50,7 @@ void setup() {
   Serial.begin(115200);
 
   Wire.begin(I2C_SDA_PIN, I2C_SCL_PIN, 400000);
-  pcfWrite(0xFFFF);  // all released
-  pinMode(BTN_SENSE_PIN, INPUT_PULLUP);
+  mcpOk = mcpBegin();
 
   for (uint8_t pin : {ENC1_PHASE_A_PIN, ENC1_PHASE_B_PIN, ENC2_PHASE_A_PIN, ENC2_PHASE_B_PIN})
     pinMode(pin, INPUT_PULLUP);

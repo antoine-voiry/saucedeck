@@ -5,7 +5,7 @@
 #include <Wire.h>
 #include "bringup.h"
 #include "pins.h"
-#include "column_scanner.h"
+#include "mcp_io.h"
 #include "quad_decoder.h"
 
 static const uint32_t kStepTimeoutMs = 20000;
@@ -24,8 +24,8 @@ static const BringupStep kSteps[] = {
     {StepKind::Button, 1u << 9, 0, 0, "Press deck button 10"},
     {StepKind::Button, 1u << 10, 0, 0, "Press deck button 11"},
     {StepKind::Button, 1u << 11, 0, 0, "Press deck button 12"},
-    {StepKind::Button, PCF_MASK_ENC1_SW, 0, 0, "Push encoder 1 knob"},
-    {StepKind::Button, PCF_MASK_ENC2_SW, 0, 0, "Push encoder 2 knob"},
+    {StepKind::Button, DECK_ENC1_SW, 0, 0, "Push encoder 1 knob"},
+    {StepKind::Button, DECK_ENC2_SW, 0, 0, "Push encoder 2 knob"},
     {StepKind::EncoderTurn, 0, 0, +1, "Turn encoder 1 ONE click clockwise"},
     {StepKind::EncoderTurn, 0, 0, -1, "Turn encoder 1 ONE click counter-clockwise"},
     {StepKind::EncoderTurn, 0, 1, +1, "Turn encoder 2 ONE click clockwise"},
@@ -61,33 +61,25 @@ static bool askYesNo(const char *q) {
   }
 }
 
-// ---------- PCF8575 ----------
+// ---------- MCP23017 ----------
 
-static bool pcfRead(uint16_t &out) {
-  if (Wire.requestFrom((uint8_t)PCF_I2C_ADDR, (uint8_t)2) != 2) return false;
-  uint16_t lo = Wire.read();
-  uint16_t hi = Wire.read();
-  out = (hi << 8) | lo;
+// Deck word, active-low like a raw port read: bit = 0 while that control is pressed.
+static bool deckRead(uint16_t &out) {
+  uint16_t raw;
+  if (!mcpReadRaw(raw)) return false;
+  out = ~deckPressed(raw);
   return true;
-}
-
-static bool pcfAllInputs() {
-  Wire.beginTransmission(PCF_I2C_ADDR);
-  Wire.write(0xFF);
-  Wire.write(0xFF);
-  return Wire.endTransmission() == 0;
 }
 
 // ---------- static checks ----------
 
 static bool checkI2C() {
-  Serial.println("\n== I2C / PCF8575 ==");
-  Wire.beginTransmission(PCF_I2C_ADDR);
-  if (Wire.endTransmission() == 0 && pcfAllInputs()) {
-    Serial.printf("PASS: PCF8575 ACK at 0x%02X\n", PCF_I2C_ADDR);
+  Serial.println("\n== I2C / MCP23017 ==");
+  if (mcpBegin()) {
+    Serial.printf("PASS: MCP23017 ACK at 0x%02X, init written\n", MCP_I2C_ADDR);
     return true;
   }
-  Serial.printf("FAIL: no ACK at 0x%02X. Scanning bus...\n", PCF_I2C_ADDR);
+  Serial.printf("FAIL: no ACK at 0x%02X. Scanning bus...\n", MCP_I2C_ADDR);
   int found = 0;
   for (uint8_t a = 0x08; a < 0x78; a++) {
     Wire.beginTransmission(a);
@@ -97,29 +89,26 @@ static bool checkI2C() {
     }
   }
   if (found)
-    Serial.println("  -> PCF on other address: check A0-A2 straps or PCF_I2C_ADDR in pins.h");
+    Serial.println("  -> MCP on other address (0x20-0x27): check A0-A2 pads or MCP_I2C_ADDR in pins.h");
   else
-    Serial.println("  -> nothing on bus: check SDA=GPIO1, SCL=GPIO6 (swapped?), 3V3, GND, pull-ups");
+    Serial.println("  -> nothing on bus: check SDA=GPIO8, SCL=GPIO7 (swapped?), 3V3, GND");
   return false;
 }
 
-static void checkIdle(bool pcfOk) {
+static void checkIdle(bool mcpOk) {
   Serial.println("\n== Idle levels (touch nothing) ==");
   delay(200);
-  if (pcfOk) {
-    uint16_t v;
-    if (!pcfRead(v)) {
-      Serial.println("FAIL: PCF read error");
-    } else if (v == 0xFFFF) {
-      Serial.println("PASS: all 16 PCF inputs HIGH");
+  if (mcpOk) {
+    uint16_t raw;
+    if (!mcpReadRaw(raw)) {
+      Serial.println("FAIL: MCP read error");
     } else {
-      for (uint8_t i = 0; i < 16; i++)
-        if (!(v & (1u << i)))
-          Serial.printf("FAIL: %s stuck LOW - short to GND, wrong switch wiring, or held\n", pcfPinName(i));
+      uint16_t held = deckPressed(raw);
+      if (!held) Serial.printf("PASS: all 14 deck inputs HIGH (raw 0x%04X)\n", raw);
+      for (uint8_t i = 0; i < 14; i++)
+        if (held & (1u << i))
+          Serial.printf("FAIL: %s stuck LOW - short to GND, wrong switch wiring, or held\n", deckPinName(i));
     }
-    delay(5);
-    Serial.println(digitalRead(PCF_INT_PIN) ? "PASS: INT (GPIO13) idle HIGH"
-                                            : "FAIL: INT (GPIO13) stuck LOW - short to GND?");
   }
   for (int e = 0; e < 2; e++)
     Serial.printf("INFO: encoder %d idle A=%d B=%d (GPIO%u/GPIO%u)\n", e + 1,
@@ -151,9 +140,11 @@ static void tftInit() {
   pinMode(tftCs, OUTPUT);
   pinMode(tftDc, OUTPUT);
   pinMode(TFT_RST_PIN, OUTPUT);
+  pinMode(TFT_BL_PIN, OUTPUT);
+  digitalWrite(TFT_BL_PIN, HIGH);
   digitalWrite(tftCs, HIGH);
   SPI.end();  // begin() is a no-op once initialized; re-init so pin variants apply
-  SPI.begin(tftSck, -1, tftMosi, -1);  // no MISO: GPIO13 belongs to PCF INT
+  SPI.begin(tftSck, -1, tftMosi, -1);  // write-only: no MISO, GPIO13 is DC
 
   digitalWrite(TFT_RST_PIN, HIGH); delay(10);
   digitalWrite(TFT_RST_PIN, LOW);  delay(20);
@@ -223,8 +214,8 @@ static bool checkLcd() {
   }
   if (askYesNo("Saw 5 full-screen colors?")) { Serial.println("PASS"); return true; }
   Serial.println("FAIL hints:");
-  Serial.println("  backlight off -> VCC/GND");
-  Serial.println("  backlight on, no image -> RST=GPIO8, DC=GPIO9, CS=GPIO10, SDA=GPIO11, SCL=GPIO12");
+  Serial.println("  backlight off -> VCC/GND, BL=GPIO9");
+  Serial.println("  backlight on, no image -> RST=GPIO44, DC=GPIO13, CS=GPIO10, SDA=GPIO11, SCL=GPIO12");
   Serial.println("  image but wrong colors -> wiring OK, inversion/RGB order fix in firmware");
   return false;
 }
@@ -241,7 +232,7 @@ static bool checkLed() {
   rgbLedWrite(LED_DATA_PIN, 0, 0, 0);
   if (askYesNo("First LED showed red, green, blue in that order?")) { Serial.println("PASS"); return true; }
   Serial.println("FAIL hints:");
-  Serial.println("  dark -> DIN on GPIO7 via 470R, strip arrow direction (DIN not DOUT), 5V, GND");
+  Serial.println("  dark -> DIN on GPIO6, DIN end (not DOUT), 5V, GND");
   Serial.println("  wrong order -> wiring OK, color order fix in firmware");
   Serial.println("  flicker/random -> 3.3V data margin, see docs/kb/peripherals.md");
   return false;
@@ -259,15 +250,15 @@ static void snapshotLevels(PhaseStats &p) {
     for (int ph = 0; ph < 2; ph++) p.level[e][ph] = digitalRead(kEncPins[e][ph]);
 }
 
-// Wait until PCF inputs and encoder phases stop changing, so bounce/overturn
+// Wait until MCP inputs and encoder phases stop changing, so bounce/overturn
 // from one step can't be judged against the next. Stuck pins don't block it.
-static void settle(uint16_t &lastPcf) {
+static void settle(uint16_t &lastDeck) {
   uint32_t quietSince = millis();
   PhaseStats p = {};
   snapshotLevels(p);
   while (millis() - quietSince < kSettleMs) {
     uint16_t v;
-    if (pcfRead(v) && v != lastPcf) { lastPcf = v; quietSince = millis(); }
+    if (deckRead(v) && v != lastDeck) { lastDeck = v; quietSince = millis(); }
     PhaseStats now = {};
     snapshotLevels(now);
     if (memcmp(now.level, p.level, sizeof p.level)) { p = now; quietSince = millis(); }
@@ -288,20 +279,20 @@ static void printPhaseHint(const BringupStep &s, const PhaseStats &p) {
     Serial.println("  -> both phases move but no full detent: half-step encoder? tell firmware dev");
 }
 
-static void runControls(bool pcfOk) {
+static void runControls(bool mcpOk) {
   Serial.println("\n== Controls (s = skip step) ==");
   BringupSequencer seq(kSteps, kStepCount);
-  uint16_t lastPcf = 0xFFFF;
+  uint16_t lastDeck = 0xFFFF;
   char msg[128];
 
   while (!seq.done()) {
     const BringupStep &step = *seq.current();
-    if (step.kind == StepKind::Button && !pcfOk) {
-      Serial.printf("[%u/%u] %s -> SKIP (no PCF8575)\n", seq.index() + 1, seq.count(), step.label);
+    if (step.kind == StepKind::Button && !mcpOk) {
+      Serial.printf("[%u/%u] %s -> SKIP (no MCP23017)\n", seq.index() + 1, seq.count(), step.label);
       seq.skip();
       continue;
     }
-    settle(lastPcf);
+    settle(lastDeck);
     Serial.printf("[%u/%u] %s ... ", seq.index() + 1, seq.count(), step.label);
 
     QuadDecoder dec[2] = {
@@ -310,7 +301,6 @@ static void runControls(bool pcfOk) {
     };
     PhaseStats ph = {};
     snapshotLevels(ph);
-    bool intSeen = false;
     uint32_t start = millis();
     StepResult r = {Verdict::Pending, 0, 0, 0};
 
@@ -335,12 +325,11 @@ static void runControls(bool pcfOk) {
         if (d) r = seq.onEncoder(e, d);
       }
 
-      if (pcfOk && r.verdict == Verdict::Pending) {
-        if (!digitalRead(PCF_INT_PIN)) intSeen = true;
+      if (mcpOk && r.verdict == Verdict::Pending) {
         uint16_t v;
-        if (pcfRead(v) && v != lastPcf) {
-          r = seq.onButtons(diffButtons(lastPcf, v));
-          lastPcf = v;
+        if (deckRead(v) && v != lastDeck) {
+          r = seq.onButtons(diffButtons(lastDeck, v));
+          lastDeck = v;
         }
       }
       delayMicroseconds(500);
@@ -349,10 +338,8 @@ static void runControls(bool pcfOk) {
     describeResult(step, r, msg, sizeof msg);
     Serial.println(msg);
     if (step.kind == StepKind::EncoderTurn && r.verdict == Verdict::Skipped) printPhaseHint(step, ph);
-    if (step.kind == StepKind::Button && r.verdict == Verdict::Skipped && step.mask & (step.mask - 1))
-      Serial.println("  -> knob switch: one terminal must go to GND. If wired PCF pin<->PCF pin, nothing pulls low");
-    if (step.kind == StepKind::Button && r.verdict != Verdict::Skipped && !intSeen)
-      Serial.println("  WARN: INT (GPIO13) never went LOW - check INT wire");
+    if (step.kind == StepKind::Button && r.verdict == Verdict::Skipped && (step.mask & ~DECK_KEYS))
+      Serial.println("  -> knob switch: S2 must be jumpered to C (GND), S1 to the MCP pin");
   }
 
   Serial.printf("\nControls: %u pass, %u fail, %u skip\n", seq.passed(), seq.failed(), seq.skipped());
@@ -362,28 +349,27 @@ static void runControls(bool pcfOk) {
 
 static void runAll() {
   Serial.println("\n######## SAUCEDECK BRING-UP ########");
-  bool pcfOk = checkI2C();
-  checkIdle(pcfOk);
+  bool mcpOk = checkI2C();
+  checkIdle(mcpOk);
   checkLcd();
   checkLed();
-  runControls(pcfOk);
+  runControls(mcpOk);
   Serial.println("\nDone. Copy this log into docs/bringup/.");
 }
 
 // ---------- single-shot commands (host-driven bench sessions) ----------
 
 static void cmdSnapshot() {
-  uint16_t v;
-  if (!pcfRead(v)) {
-    Serial.println("PCF: read error (no ACK)");
+  uint16_t raw;
+  if (!mcpReadRaw(raw)) {
+    Serial.println("MCP: read error (no ACK)");
   } else {
-    Serial.printf("PCF: 0x%04X low:", v);
-    bool any = false;
-    for (uint8_t i = 0; i < 16; i++)
-      if (!(v & (1u << i))) { Serial.printf(" %s", pcfPinName(i)); any = true; }
-    Serial.println(any ? "" : " none");
+    uint16_t held = deckPressed(raw);
+    Serial.printf("MCP: raw 0x%04X low:", raw);
+    for (uint8_t i = 0; i < 14; i++)
+      if (held & (1u << i)) Serial.printf(" %s", deckPinName(i));
+    Serial.println(held ? "" : " none");
   }
-  Serial.printf("INT: %d\n", digitalRead(PCF_INT_PIN));
   for (int e = 0; e < 2; e++)
     Serial.printf("ENC%d: A=%d B=%d\n", e + 1, digitalRead(kEncPins[e][0]), digitalRead(kEncPins[e][1]));
 }
@@ -391,26 +377,21 @@ static void cmdSnapshot() {
 static void cmdMonitor(uint32_t ms) {
   Serial.printf("Monitoring %lu s...\n", (unsigned long)(ms / 1000));
   uint16_t last = 0xFFFF;
-  pcfRead(last);
+  deckRead(last);
   QuadDecoder dec[2] = {
       QuadDecoder(digitalRead(ENC1_PHASE_A_PIN), digitalRead(ENC1_PHASE_B_PIN)),
       QuadDecoder(digitalRead(ENC2_PHASE_A_PIN), digitalRead(ENC2_PHASE_B_PIN)),
   };
   PhaseStats ph = {};
   snapshotLevels(ph);
-  uint32_t intLows = 0;
-  bool intPrev = true;
   uint32_t start = millis();
   while (millis() - start < ms) {
-    bool intNow = digitalRead(PCF_INT_PIN);
-    if (intPrev && !intNow) intLows++;
-    intPrev = intNow;
     uint16_t v;
-    if (pcfRead(v) && v != last) {
+    if (deckRead(v) && v != last) {
       ButtonEvents ev = diffButtons(last, v);
-      for (uint8_t i = 0; i < 16; i++) {
-        if (ev.pressed & (1u << i)) Serial.printf("%6lu ms  %s DOWN\n", (unsigned long)(millis() - start), pcfPinName(i));
-        if (ev.released & (1u << i)) Serial.printf("%6lu ms  %s UP\n", (unsigned long)(millis() - start), pcfPinName(i));
+      for (uint8_t i = 0; i < 14; i++) {
+        if (ev.pressed & (1u << i)) Serial.printf("%6lu ms  %s DOWN\n", (unsigned long)(millis() - start), deckPinName(i));
+        if (ev.released & (1u << i)) Serial.printf("%6lu ms  %s UP\n", (unsigned long)(millis() - start), deckPinName(i));
       }
       last = v;
     }
@@ -423,7 +404,6 @@ static void cmdMonitor(uint32_t ms) {
     }
     delayMicroseconds(500);
   }
-  Serial.printf("INT low edges: %lu\n", (unsigned long)intLows);
   for (int e = 0; e < 2; e++)
     Serial.printf("ENC%d toggles: A=%lu B=%lu\n", e + 1, (unsigned long)ph.toggles[e][0],
                   (unsigned long)ph.toggles[e][1]);
@@ -442,128 +422,114 @@ static void cmdScan() {
   Serial.printf("\n%d device(s) ACK%s\n", found, found > 3 ? "  <- bus stuck low / bad pull-ups" : "");
 }
 
+// Raw MCP port read, 10x over 200 ms: GPA in low byte, GPB in high byte. Idle = 0x7F7F
+// (GPA7/GPB7 are outputs driven LOW).
 static void cmdReadBurst() {
-  Wire.beginTransmission(PCF_I2C_ADDR);
-  Wire.write(0xFF);
-  Wire.write(0xFF);
-  Serial.printf("write 0xFFFF -> err %d\n", Wire.endTransmission());
   for (int i = 0; i < 10; i++) {
-    uint16_t v = 0;
-    bool ok = pcfRead(v);
-    Serial.printf(ok ? " %04X" : " ERR", v);
+    uint16_t raw = 0;
+    Serial.printf(mcpReadRaw(raw) ? " %04X" : " ERR", raw);
     delay(20);
   }
   Serial.println();
 }
 
-// Drive pattern, read back 5x, then release to inputs. Powered PCF: low bits read 0 solid.
-static void cmdPattern(uint16_t pattern) {
-  Wire.beginTransmission(PCF_I2C_ADDR);
-  Wire.write(pattern & 0xFF);
-  Wire.write(pattern >> 8);
-  Serial.printf("drive 0x%04X -> err %d, read:", pattern, Wire.endTransmission());
-  for (int i = 0; i < 5; i++) {
-    uint16_t v = 0;
-    Serial.printf(pcfRead(v) ? " %04X" : " ERR", v);
-    delay(20);
+// Wire return codes for one register write and one register read (with and without
+// repeated start). 0 = OK, 2 = NACK on address, 3 = NACK on data, 4/5 = bus error/timeout.
+static void cmdMcpDiag() {
+  // 1) State left by the previous 'd': GPPUA was written 0x7F. 00 here = chip was reset.
+  for (int t = 0; t < 5; t++) {
+    Wire.beginTransmission(MCP_I2C_ADDR);
+    Wire.write(MCP_GPPUA);
+    uint8_t e = Wire.endTransmission(false);
+    uint8_t n = Wire.requestFrom((uint8_t)MCP_I2C_ADDR, (uint8_t)1);
+    if (e == 0 && n == 1) { Serial.printf("GPPUA at entry = %02X (try %d)\n", Wire.read(), t); break; }
+    Serial.printf("GPPUA at entry: ERR e=%u n=%u\n", e, n);
   }
-  Serial.println();
-  pcfAllInputs();
-}
+  Wire.beginTransmission(MCP_I2C_ADDR);
+  Wire.write(MCP_GPPUA);
+  Wire.write(0x7F);
+  Serial.printf("write GPPUA=7F -> %u\n", Wire.endTransmission());
 
-// Drive one pin low at a time; any other pin reading low is coupled (short/bridge/load).
-static void cmdShortMatrix() {
-  auto writePcf = [](uint16_t v) {
-    Wire.beginTransmission(PCF_I2C_ADDR);
-    Wire.write(v & 0xFF);
-    Wire.write(v >> 8);
-    return Wire.endTransmission();
-  };
-  writePcf(0xFFFF);
-  delay(50);
-  uint16_t base = 0;
-  pcfRead(base);
-  Serial.printf("baseline all-high: %04X\n", base);
-  for (uint8_t i = 0; i < 16; i++) {
-    writePcf(0xFFFF & ~(1u << i));
-    delay(5);
-    uint16_t a = 0, b = 0;
-    bool ok = pcfRead(a);
-    delay(20);
-    ok = ok && pcfRead(b);
-    uint16_t followers = ~(a | b) & ~(1u << i) & base;  // low now, high at baseline
-    Serial.printf("%s low -> read %04X/%04X", pcfPinName(i), a, b);
-    if (!ok) Serial.print("  ERR");
-    for (uint8_t j = 0; j < 16; j++)
-      if (followers & (1u << j)) Serial.printf("  +%s", pcfPinName(j));
+  // 2) Probe 0x20-0x27, 40 rounds, sweep the idle gap between probes (us).
+  for (int gapUs : {0, 100, 300, 1000, 3000, 10000, 20000}) {
+    uint8_t hits[8] = {};
+    for (int r = 0; r < 40; r++)
+      for (uint8_t a = 0; a < 8; a++) {
+        Wire.beginTransmission(0x20 + a);
+        if (Wire.endTransmission() == 0) hits[a]++;
+        if (gapUs) delayMicroseconds(gapUs);
+      }
+    Serial.printf("gap %5d us, ACKs/40:", gapUs);
+    for (uint8_t a = 0; a < 8; a++) Serial.printf(" %02X:%u", 0x20 + a, hits[a]);
     Serial.println();
   }
-  writePcf(0xFFFF);
+  Serial.printf("SDA=%d SCL=%d\n", digitalRead(I2C_SDA_PIN), digitalRead(I2C_SCL_PIN));
+
+  // 3) After one good probe, sample the idle bus every ~5 us for 10 ms: any LOW = glitch.
+  Wire.beginTransmission(MCP_I2C_ADDR);
+  Wire.endTransmission();
+  uint32_t t0 = micros(), firstSda = 0, firstScl = 0, lowSda = 0, lowScl = 0, n = 0;
+  while (micros() - t0 < 10000) {
+    uint32_t t = micros() - t0;
+    if (!digitalRead(I2C_SDA_PIN)) { if (!lowSda) firstSda = t; lowSda++; }
+    if (!digitalRead(I2C_SCL_PIN)) { if (!lowScl) firstScl = t; lowScl++; }
+    n++;
+  }
+  Serial.printf("idle 10 ms, %lu samples: SDA low %lu (first @%lu us), SCL low %lu (first @%lu us)\n",
+                (unsigned long)n, (unsigned long)lowSda, (unsigned long)firstSda, (unsigned long)lowScl,
+                (unsigned long)firstScl);
 }
 
-// Column scan (PCF8575C without pull-ups): print button edges for `ms`.
-static void cmdColumnScan(uint32_t ms) {
-  Serial.printf("Column scan %lu s, sense GPIO%u (idle=%d)...\n", (unsigned long)(ms / 1000), BTN_SENSE_PIN,
-                digitalRead(BTN_SENSE_PIN));
-  ColumnScanner scan(0xFFFF);
-  uint16_t last = 0;
-  uint32_t scans = 0, start = millis();
-  while (millis() - start < ms) {
-    Wire.beginTransmission(PCF_I2C_ADDR);
-    uint16_t w = scan.driveWord();
-    Wire.write(w & 0xFF);
-    Wire.write(w >> 8);
-    Wire.endTransmission();
-    if (!scan.feed(digitalRead(BTN_SENSE_PIN) == LOW)) continue;
-    scans++;
-    uint16_t now = scan.pressed();
-    ButtonEvents ev = diffButtons(~last, ~now);
-    for (uint8_t i = 0; i < 16; i++) {
-      unsigned long t = millis() - start;
-      if (ev.pressed & (1u << i)) Serial.printf("%6lu ms  %s (button %u) DOWN\n", t, pcfPinName(i), i + 1u);
-      if (ev.released & (1u << i)) Serial.printf("%6lu ms  %s (button %u) UP\n", t, pcfPinName(i), i + 1u);
-    }
-    last = now;
+// ---------- bit-banged I2C (driver-independent check), ~25 kHz ----------
+
+static void bbDelay() { delayMicroseconds(20); }
+static void bbRelease(uint8_t pin) { pinMode(pin, INPUT_PULLUP); }
+static void bbLow(uint8_t pin) { digitalWrite(pin, LOW); pinMode(pin, OUTPUT); }
+
+static void bbStart() {
+  bbRelease(I2C_SDA_PIN); bbRelease(I2C_SCL_PIN); bbDelay();
+  bbLow(I2C_SDA_PIN); bbDelay(); bbLow(I2C_SCL_PIN); bbDelay();
+}
+static void bbStop() {
+  bbLow(I2C_SDA_PIN); bbDelay(); bbRelease(I2C_SCL_PIN); bbDelay(); bbRelease(I2C_SDA_PIN); bbDelay();
+}
+// Returns true on ACK.
+static bool bbWrite(uint8_t b) {
+  for (int i = 7; i >= 0; i--) {
+    if (b & (1 << i)) bbRelease(I2C_SDA_PIN); else bbLow(I2C_SDA_PIN);
+    bbDelay(); bbRelease(I2C_SCL_PIN); bbDelay(); bbLow(I2C_SCL_PIN);
   }
-  pcfAllInputs();
-  Serial.printf("%lu full scans (%.2f ms/scan)\n", (unsigned long)scans, scans ? (double)ms / scans : 0.0);
+  bbRelease(I2C_SDA_PIN); bbDelay(); bbRelease(I2C_SCL_PIN); bbDelay();
+  bool ack = !digitalRead(I2C_SDA_PIN);
+  bbLow(I2C_SCL_PIN); bbDelay();
+  return ack;
+}
+
+// Wire released, same pins bit-banged: addr probe with idle gaps, then GPPUB write.
+static void cmdBitBang() {
+  Wire.end();
+  for (int gapMs : {0, 5, 20, 100}) {
+    int ok = 0;
+    for (int r = 0; r < 20; r++) {
+      bbStart();
+      if (bbWrite(MCP_I2C_ADDR << 1)) ok++;
+      bbStop();
+      if (gapMs) delay(gapMs);
+    }
+    Serial.printf("bit-bang gap %3d ms: ACK %d/20\n", gapMs, ok);
+  }
+  delay(50);
+  bbStart();
+  bool a = bbWrite(MCP_I2C_ADDR << 1), r = bbWrite(MCP_GPPUB), v = bbWrite(0x7F);
+  bbStop();
+  Serial.printf("bit-bang write GPPUB=7F after 50 ms idle: addr %d reg %d val %d\n", a, r, v);
+  Wire.begin(I2C_SDA_PIN, I2C_SCL_PIN, 400000);
 }
 
 static void cmdToggleSpeed() {
   i2cHz = i2cHz == 400000 ? 100000 : 400000;
   Wire.setClock(i2cHz);
   Serial.printf("I2C clock now %lu Hz\n", (unsigned long)i2cHz);
-}
-
-// Candidate config found on bench: CS/DC and SCK/MOSI both reversed vs pins.h, SPI mode 3.
-static void cmdLcdCandidate() {
-  tftCs = TFT_DC_PIN;
-  tftDc = TFT_CS_PIN;
-  tftSck = TFT_SDA_PIN;
-  tftMosi = TFT_SCL_PIN;
-  tftSpi = SPISettings(4000000, MSBFIRST, SPI_MODE3);
-  Serial.printf("CS=GPIO%u DC=GPIO%u SCK=GPIO%u MOSI=GPIO%u mode3: RED GREEN BLUE WHITE 2 s each\n",
-                tftCs, tftDc, tftSck, tftMosi);
-  tftInit();
-  for (uint16_t c : {0xF800, 0x07E0, 0x001F, 0xFFFF}) {
-    tftFill(c);
-    delay(2000);
-  }
-}
-
-// Hold one solid color (candidate config, no re-init after first call): 1=red 2=green 3=blue
-static void cmdLcdSolid(uint16_t color) {
-  static bool ready = false;
-  if (!ready || tftCs != TFT_DC_PIN) {
-    tftCs = TFT_DC_PIN;
-    tftDc = TFT_CS_PIN;
-    tftSck = TFT_SDA_PIN;
-    tftMosi = TFT_SCL_PIN;
-    tftSpi = SPISettings(4000000, MSBFIRST, SPI_MODE3);
-    tftInit();
-    ready = true;
-  }
-  tftFill(color);
 }
 
 static void cmdLcd() {
@@ -587,7 +553,7 @@ static void cmdLed() {
 static void printHelp() {
   Serial.println("Commands: i=I2C+idle  p=snapshot  m=monitor 10s  M=monitor 30s");
   Serial.println("          l=LCD colors  w=LED1 colors  o=LED1 off  k=LCD black  g=guided full test");
-  Serial.println("          s=I2C scan  r=PCF write+10 reads  f=toggle I2C 400k/100k  z=PCF drive patterns  x=PCF short matrix  c=button column scan 30s  v/V=LCD SPI variants (V: SCK/MOSI swapped)");
+  Serial.println("          s=I2C scan  b=MCP init  d=MCP I2C diag  e=bit-bang I2C test  r=MCP raw 10 reads  f=toggle I2C 400k/100k  v/V=LCD SPI variants (V: SCK/MOSI swapped)");
 }
 
 void setup() {
@@ -595,11 +561,9 @@ void setup() {
   while (!Serial) delay(10);  // wait for monitor (USB CDC DTR)
 
   Wire.begin(I2C_SDA_PIN, I2C_SCL_PIN, 400000);
-  pinMode(PCF_INT_PIN, INPUT_PULLUP);
-  pinMode(BTN_SENSE_PIN, INPUT_PULLUP);
   for (auto &pins : kEncPins)
     for (uint8_t pin : pins) pinMode(pin, INPUT_PULLUP);
-  pcfAllInputs();
+  mcpBegin();
 
   Serial.println("SAUCEDECK bring-up ready.");
   printHelp();
@@ -615,10 +579,6 @@ void loop() {
     case 'm': cmdMonitor(10000); break;
     case 'M': cmdMonitor(30000); break;
     case 'l': cmdLcd(); break;
-    case 'q': cmdLcdCandidate(); break;
-    case '1': cmdLcdSolid(0xF800); break;
-    case '2': cmdLcdSolid(0x07E0); break;
-    case '3': cmdLcdSolid(0x001F); break;
     case 'v': cmdLcdVariants(false); break;
     case 'V': cmdLcdVariants(true); break;
     case 'k': tftInit(); tftFill(0x0000); break;
@@ -627,10 +587,10 @@ void loop() {
     case 'g': runAll(); break;
     case 's': cmdScan(); break;
     case 'r': cmdReadBurst(); break;
+    case 'd': cmdMcpDiag(); break;
+    case 'e': cmdBitBang(); break;
+    case 'b': Serial.println(mcpBegin() ? "MCP init OK" : "MCP init FAIL (no ACK)"); break;
     case 'f': cmdToggleSpeed(); break;
-    case 'x': cmdShortMatrix(); break;
-    case 'c': cmdColumnScan(30000); break;
-    case 'z': cmdPattern(0x0000); cmdPattern(0xFF00); cmdPattern(0x00FF); cmdPattern(0xFFFF); break;
     case 'h': case '?': printHelp(); break;
     default: return;  // ignore CR/LF and noise
   }
