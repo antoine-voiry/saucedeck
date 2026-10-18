@@ -1,5 +1,6 @@
 #include "bringup.h"
 #include <stdio.h>
+#include "mcp23017.h"
 
 static const StepResult kPending = {Verdict::Pending, 0, 0, 0};
 
@@ -28,12 +29,6 @@ StepResult BringupSequencer::onEncoder(uint8_t enc, int dir) {
 
 void BringupSequencer::skip() {
   if (!done()) finish({Verdict::Skipped, 0, 0, 0});
-}
-
-const char *pcfPinName(uint8_t bit) {
-  static const char *kNames[16] = {"P00", "P01", "P02", "P03", "P04", "P05", "P06", "P07",
-                                   "P10", "P11", "P12", "P13", "P14", "P15", "P16", "P17"};
-  return bit < 16 ? kNames[bit] : "P??";
 }
 
 static int lowestBit(uint16_t v) {
@@ -70,10 +65,10 @@ void describeResult(const BringupStep &step, const StepResult &r, char *buf, siz
   if (!singleBit(r.gotBits)) {
     snprintf(buf, len, "FAIL: got 0x%04X (several pins) - short between pins?", r.gotBits);
   } else if (singleBit(step.mask)) {
-    snprintf(buf, len, "FAIL: got %s, expected %s - wires crossed", pcfPinName(lowestBit(r.gotBits)),
-             pcfPinName(lowestBit(step.mask)));
+    snprintf(buf, len, "FAIL: got %s, expected %s - wires crossed", deckPinName(lowestBit(r.gotBits)),
+             deckPinName(lowestBit(step.mask)));
   } else {
     snprintf(buf, len, "FAIL: got %s, expected mask 0x%04X - wires crossed",
-             pcfPinName(lowestBit(r.gotBits)), step.mask);
+             deckPinName(lowestBit(r.gotBits)), step.mask);
   }
 }

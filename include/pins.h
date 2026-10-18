@@ -1,35 +1,25 @@
 #pragma once
-// Pin map — see wiring.md
+// Pin map — see wiring.md. Silkscreen number on the SuperMini = GPIO number.
 
-// PCF8575 / I2C
-#define I2C_SDA_PIN         1
-#define I2C_SCL_PIN         6
-#define PCF_INT_PIN        13
-#define PCF_I2C_ADDR     0x20
-// Shared button return line (U0RXD, free: Serial runs over USB CDC). INPUT_PULLUP.
-// PCF8575C is open-drain with no pull-ups, so buttons are column-scanned:
-// one PCF pin driven LOW at a time, this pin reads LOW if that button is pressed.
-#define BTN_SENSE_PIN      44
+// MCP23017 on I2C. INTA/INTB not connected: firmware polls.
+#define I2C_SDA_PIN         8
+#define I2C_SCL_PIN         7
+#define MCP_I2C_ADDR     0x27  // Waveshare board, A0-A2 pads open (unverified until bus scan)
 
-// ST7789 LCD (SPI). BL tied to 3V3 (always on).
-// Bench-verified 2026-10-04 (bringup 'q'): SCK/MOSI not on FSPI IO_MUX pins -> GPIO matrix, <=40 MHz
-#define TFT_SCL_PIN        11
-#define TFT_SDA_PIN        12
-#define TFT_CS_PIN          9
-#define TFT_DC_PIN         10
-#define TFT_RST_PIN         8
+// ST7789 LCD (SPI, write-only). GPIO12/11 = FSPICLK/FSPID on IO_MUX.
+#define TFT_SCL_PIN        12  // SCK
+#define TFT_SDA_PIN        11  // MOSI
+#define TFT_CS_PIN         10
+#define TFT_DC_PIN         13
+#define TFT_RST_PIN        44  // U0RXD, free: Serial runs over USB CDC
+#define TFT_BL_PIN          9  // check BL current <= 20 mA before driving from GPIO
 
 // Addressable LED strip
-#define LED_DATA_PIN        7
+#define LED_DATA_PIN        6
 
-// EC11 quadrature encoders
-#define ENC1_PHASE_A_PIN    2
-#define ENC1_PHASE_B_PIN    3
-#define ENC2_PHASE_A_PIN    4
-#define ENC2_PHASE_B_PIN    5
-
-// PCF8575 bitmasks (active-low inputs)
-#define PCF_MASK_KEYS_LOW   0x00FF  // P00-P07: deck buttons 1-8
-#define PCF_MASK_KEYS_HIGH  0x0F00  // P10-P13: deck buttons 9-12
-#define PCF_MASK_ENC1_SW    0x3000  // P14-P15: EC11 #1 switch
-#define PCF_MASK_ENC2_SW    0xC000  // P16-P17: EC11 #2 switch
+// EC11 quadrature encoders. Knob 1 = switch GPB4, knob 2 = switch GPB5.
+// Bench-verified 2026-10-18: knob 1 rotation is on GPIO3/4, knob 2 on GPIO1/2.
+#define ENC1_PHASE_A_PIN    3  // strapping pin (JTAG source), input only, safe with default eFuses
+#define ENC1_PHASE_B_PIN    4
+#define ENC2_PHASE_A_PIN    1
+#define ENC2_PHASE_B_PIN    2

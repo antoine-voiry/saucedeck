@@ -10,7 +10,7 @@ enum class StepKind : uint8_t { Button, EncoderTurn };
 
 struct BringupStep {
   StepKind kind;
-  uint16_t mask;  // Button: PCF8575 bit(s) that count as the expected press
+  uint16_t mask;  // Button: deck bit(s) (see mcp23017.h) that count as the expected press
   uint8_t enc;    // EncoderTurn: encoder index (0-based)
   int8_t dir;     // EncoderTurn: +1 CW, -1 CCW
   const char *label;
@@ -50,9 +50,6 @@ class BringupSequencer {
   size_t index_ = 0;
   size_t passed_ = 0, failed_ = 0, skipped_ = 0;
 };
-
-// "P00".."P07", "P10".."P17" for bit 0..15, "P??" otherwise.
-const char *pcfPinName(uint8_t bit);
 
 // Bench-readable verdict with a probable wiring cause.
 void describeResult(const BringupStep &step, const StepResult &r, char *buf, size_t len);

@@ -1,7 +1,7 @@
 #pragma once
 #include <stdint.h>
 
-// Edge events between two PCF8575 reads. Inputs are active-low (0 = pressed).
+// Edge events between two reads. Inputs are active-low (0 = pressed).
 struct ButtonEvents {
   uint16_t pressed;
   uint16_t released;

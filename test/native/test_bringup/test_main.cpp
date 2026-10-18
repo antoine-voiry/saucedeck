@@ -7,7 +7,7 @@ void tearDown() {}
 
 static const BringupStep kSteps[] = {
     {StepKind::Button, 0x0001, 0, 0, "Press button 1"},
-    {StepKind::Button, 0x3000, 0, 0, "Press encoder 1 knob"},
+    {StepKind::Button, 0x1000, 0, 0, "Press encoder 1 knob"},
     {StepKind::EncoderTurn, 0, 0, +1, "Turn encoder 1 CW"},
     {StepKind::EncoderTurn, 0, 1, -1, "Turn encoder 2 CCW"},
 };
@@ -122,16 +122,6 @@ void test_events_after_done_are_pending() {
   TEST_ASSERT_EQUAL_UINT(0, s.skipped());
 }
 
-// --- pcfPinName: bit index -> PCF8575 pin label ---
-
-void test_pin_names() {
-  TEST_ASSERT_EQUAL_STRING("P00", pcfPinName(0));
-  TEST_ASSERT_EQUAL_STRING("P07", pcfPinName(7));
-  TEST_ASSERT_EQUAL_STRING("P10", pcfPinName(8));
-  TEST_ASSERT_EQUAL_STRING("P17", pcfPinName(15));
-  TEST_ASSERT_EQUAL_STRING("P??", pcfPinName(16));
-}
-
 // --- describeResult: human diagnosis for bench ---
 
 static char buf[128];
@@ -143,7 +133,7 @@ void test_describe_pass() {
 
 void test_describe_wrong_button_names_pin() {
   describeResult(kSteps[0], {Verdict::Fail, 0x0020, 0, 0}, buf, sizeof buf);
-  TEST_ASSERT_NOT_NULL(strstr(buf, "P05"));
+  TEST_ASSERT_NOT_NULL(strstr(buf, "GPA5"));
   TEST_ASSERT_NOT_NULL(strstr(buf, "crossed"));
 }
 
@@ -183,7 +173,6 @@ int main(int, char **) {
   RUN_TEST(test_skip_advances_and_counts);
   RUN_TEST(test_done_after_last_step_and_tallies);
   RUN_TEST(test_events_after_done_are_pending);
-  RUN_TEST(test_pin_names);
   RUN_TEST(test_describe_pass);
   RUN_TEST(test_describe_wrong_button_names_pin);
   RUN_TEST(test_describe_extra_bits_suggests_short);

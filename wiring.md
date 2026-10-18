@@ -1,116 +1,99 @@
 # ESP32-S3 SuperMini Macro Deck Pinout Mapping
 
+Rebuild of 2026-10-18 (perfboard). Silkscreen number on the SuperMini = GPIO number.
+Mirrored in `include/pins.h` — change both or neither.
+
 ---
 
 ## 1. ESP32-S3 SuperMini Board Pinout
 
-| Pin / Pad | Destination Signal / Device | Bus / Protocol | Notes |
+| Pin / Pad | Destination | Bus / Protocol | Notes |
 | :--- | :--- | :--- | :--- |
-| **5V / VBUS** | • LCD `VCC`<br>• LED Strip `5V Rail` | Power (5V) | Direct 5V from USB host |
-| **3V3** | PCF8575 `VCC` + `VDD`, LCD `BL` | Power (3.3V) | VDD jumper bypasses module AMS1117 (else chip gets ~2.2V) |
-| **GND** | Common System GND | Ground | Tied across all modules, switches, and LED strip |
-| **GPIO 1** | PCF8575 — `SDA` | I2C Data | Hardware I2C data line |
-| **GPIO 2** | EC11 #1 — `Phase A` | Direct GPIO | Hardware interrupt line |
-| **GPIO 3** | EC11 #1 — `Phase B` | Direct GPIO | Hardware interrupt line |
-| **GPIO 4** | EC11 #2 — `Phase A` | Direct GPIO | Hardware interrupt line |
-| **GPIO 5** | EC11 #2 — `Phase B` | Direct GPIO | Hardware interrupt line |
-| **GPIO 6** | PCF8575 — `SCL` | I2C Clock | Hardware I2C clock line |
-| **GPIO 7** | LED Strip — `DIN` | Single-wire | WS2812B/NeoPixel data signal |
-| **GPIO 8** | LCD — `RST` | SPI Control | Display hardware reset line |
-| **GPIO 9** | LCD — `CS` | SPI Control | Chip Select |
-| **GPIO 10** | LCD — `DC` | SPI Control | ST7789 Data / Command select |
-| **GPIO 11** | LCD — `SCL` (SCK) | SPI Clock | Master Clock (GPIO matrix, ≤40 MHz) |
-| **GPIO 12** | LCD — `SDA` (MOSI) | SPI Master Out | Master Out Slave In |
-| **GPIO 13** | PCF8575 — `INT` | Direct GPIO | Active-Low interrupt (`INPUT_PULLUP`). Never fired on bench — wire suspect, unused by firmware |
-| **GPIO 44 (RX)** | Shared button return (all 12 button commons) | Direct GPIO | `INPUT_PULLUP`. Column scan sense line — commons NOT on GND |
+| **5V / VBUS** | LED board `5V` **only** | Power (5V) | Direct 5V from USB host |
+| **3V3** | MCP23017 `VCC`, LCD `VCC` | Power (3.3V) | Never 5V on MCP VCC (its I2C pull-ups would put 5V on GPIO7/8) |
+| **GND** | Common system GND | Ground | Encoders C+S2, key chain, MCP, LCD, LED |
+| **GPIO 1** | EC11 #2 — `A` | Direct GPIO | `INPUT_PULLUP` |
+| **GPIO 2** | EC11 #2 — `B` | Direct GPIO | `INPUT_PULLUP` |
+| **GPIO 3** | EC11 #1 — `A` | Direct GPIO | Strapping pin (JTAG source). Input only. Safe with default eFuses |
+| **GPIO 4** | EC11 #1 — `B` | Direct GPIO | `INPUT_PULLUP` |
+| **GPIO 5** | — | — | Must stay empty |
+| **GPIO 6** | LED board — `DIN` | Single-wire | WS2812, DIN end |
+| **GPIO 7** | MCP23017 — `SCL` | I2C clock | |
+| **GPIO 8** | MCP23017 — `SDA` | I2C data | |
+| **GPIO 9** | LCD — `BL` | Output | Measure BL current first: > 20 mA → BL to 3V3 instead |
+| **GPIO 10** | LCD — `CS` | SPI | |
+| **GPIO 11** | LCD — `SDA` (MOSI) | SPI | FSPID on IO_MUX |
+| **GPIO 12** | LCD — `SCL` (SCK) | SPI | FSPICLK on IO_MUX |
+| **GPIO 13** | LCD — `DC` | SPI control | |
+| **GPIO 43 (TX)** | — | — | Must stay empty: ROM boot log drives it |
+| **GPIO 44 (RX)** | LCD — `RST` | Output | Free because Serial runs over USB CDC. Never `Serial0.begin()` |
 
 ---
 
-## 2. PCF8575 I/O Expander Mapping
+## 2. MCP23017 (Waveshare board)
 
-Chip fitted is a **PCF8575C** (open-drain, no internal pull-ups). Buttons are **column-scanned**: firmware drives one P pin LOW at a time; button commons join on **GPIO 44** (`INPUT_PULLUP`), which reads LOW when the driven pin's button is pressed. Button commons must **not** be tied to GND.
+Chip: MCP23017. Address 0x27 (A0–A2 pads open, bench-verified 2026-10-18). RESET handled on the board.
+Keys and encoder switches go **straight to GND**; firmware enables the internal pull-ups (GPPU).
+**GPA7 and GPB7 are output-only on the MCP23017** (Microchip DS20001952D) → unused, driven LOW by firmware.
 
-| PCF8575 Pin | Connected Switch / Function | Mapping Detail |
+Key **positions** are the physical order on the deck (bench-verified 2026-10-18); they differ
+from the K labels used while soldering. Firmware sends position 1–12 as F13–F24.
+
+| MCP23017 Pin | Connected To | Deck bit |
 | :--- | :--- | :--- |
-| **VCC** | ESP32 `3V3` | Power rail |
-| **GND** | System Common `GND` | Ground rail |
-| **SDA** | ESP32 `GPIO 1` | I2C Data |
-| **SCL** | ESP32 `GPIO 6` | I2C Clock |
-| **INT** | ESP32 `GPIO 13` | Interrupt trigger line |
-| **P00** | Deck Button 1 | Side 1 |
-| **P01** | Deck Button 2 | Side 1 |
-| **P02** | Deck Button 3 | Side 1 |
-| **P03** | Deck Button 4 | Side 1 |
-| **P04** | Deck Button 5 | Side 1 |
-| **P05** | Deck Button 6 | Side 1 |
-| **P06** | Deck Button 7 | Side 1 |
-| **P07** | Deck Button 8 | Side 1 |
-| **P10** | Deck Button 9 | Opposite Side |
-| **P11** | Deck Button 10 | Opposite Side |
-| **P12** | Deck Button 11 | Opposite Side |
-| **P13** | Deck Button 12 | Opposite Side |
-| **P14** | EC11 #1 Switch Line 1 | Rotary switch terminal |
-| **P15** | EC11 #1 Switch Line 2 | Rotary switch terminal |
-| **P16** | EC11 #2 Switch Line 1 | Rotary switch terminal |
-| **P17** | EC11 #2 Switch Line 2 | Rotary switch terminal |
+| **VCC** | ESP32 `3V3` | |
+| **GND** | System `GND` | |
+| **SDA** | ESP32 `GPIO 8` | |
+| **SCL** | ESP32 `GPIO 7` | |
+| **INTA, INTB** | nothing | firmware polls |
+| **GPB0–GPB3** | Key positions 1–4 | 0–3 |
+| **GPA4–GPA6** | Key positions 5–7 | 4–6 |
+| **GPB6** | Key position 8 | 7 |
+| **GPA3, GPA2, GPA1, GPA0** | Key positions 9, 10, 11, 12 | 8–11 |
+| **GPA7** | unused (output-only) | |
+| **GPB4** | EC11 #1 `S1` (knob 1) | 12 |
+| **GPB5** | EC11 #2 `S1` (knob 2) | 13 |
+| **GPB7** | unused (output-only) | |
+
+Key leg 2 of all 12 keys chained to GND. EC11 `S2` jumpered to its own `C` (GND).
 
 ---
 
-## 2b. LED Strip (WS2812B)
+## 3. EC11 encoders
 
-| Strip Pin | Connected To | Notes |
+| Pin | Encoder 1 | Encoder 2 |
 | :--- | :--- | :--- |
-| **5V** | ESP32 `5V / VBUS` | 70 µF electrolytic across 5V/GND at strip input (watch polarity) |
-| **GND** | System Common `GND` | |
-| **DIN** | ESP32 `GPIO 7` via series resistor | 470 Ω series resistor; place close to strip DIN |
-
-> Data level: 3.3V GPIO vs 3.5V VIH min at 5V supply — marginal, no level shifter fitted. See `docs/kb/peripherals.md`.
+| **A** | GPIO 3 | GPIO 1 |
+| **B** | GPIO 4 | GPIO 2 |
+| **C** | GND | GND |
+| **S1** | MCP GPB4 | MCP GPB5 |
+| **S2** | jumper to C | jumper to C |
 
 ---
 
-## 3. LCD Screen Mapping (GMT020-02-8P)
+## 4. LED board (WS2812)
 
-| Screen Pin | Connected ESP32 Pin / Rail | Function |
+| Pin | Connected To | Notes |
 | :--- | :--- | :--- |
-| **GND** | System Common `GND` | Power Ground |
-| **VCC** | ESP32 `5V` (or `3V3`) | Onboard 6206A 3.3V LDO handles 5V input |
-| **SCL** | ESP32 `GPIO 11` | SPI Clock |
-| **SDA** | ESP32 `GPIO 12` | SPI MOSI |
-| **RST** | ESP32 `GPIO 8` | Hardware Reset |
-| **DC** | ESP32 `GPIO 10` | Data/Command Register Select |
-| **CS** | ESP32 `GPIO 9` | SPI Chip Select |
-| **BL** | ESP32 `3V3` | Backlight always on. Floating BL = backlight OFF (bench 2026-10-04). Future: GPIO14 PWM after current check |
+| **5V** | ESP32 `5V` | Resistor and cap already on the board |
+| **GND** | System `GND` | |
+| **DIN** | ESP32 `GPIO 6` | DIN end, DOUT free |
 
-> Pin map bench-verified 2026-10-04 (color cycle correct, SPI mode 0/3 both OK, no inversion/BGR fix needed beyond INVON).
+> Data level: 3.3V GPIO vs 3.5V VIH min at 5V supply — marginal. Fallback: 1N4001 in LED 5V wire. See `docs/kb/peripherals.md`.
 
 ---
 
-## 4. C++ Firmware Definitions
+## 5. LCD (GMT020-02-8P, ST7789 2.0" 240×320)
 
-```cpp
-// PCF8575 / I2C Configuration
-#define I2C_SDA_PIN         1
-#define I2C_SCL_PIN         6
-#define PCF_INT_PIN        13
+| Screen Pin | Connected To | Function |
+| :--- | :--- | :--- |
+| **GND** | System `GND` | |
+| **VCC** | ESP32 `3V3` | |
+| **SCL** | ESP32 `GPIO 12` | SPI clock |
+| **SDA** | ESP32 `GPIO 11` | SPI MOSI |
+| **RST** | ESP32 `GPIO 44` (RX) | Reset, active low |
+| **DC** | ESP32 `GPIO 13` | Data / command |
+| **CS** | ESP32 `GPIO 10` | Chip select |
+| **BL** | ESP32 `GPIO 9` | Or 3V3 if BL draws > 20 mA |
 
-// ST7789 LCD SPI Configuration
-#define TFT_SCL_PIN        11
-#define TFT_SDA_PIN        12
-#define TFT_CS_PIN          9
-#define TFT_DC_PIN         10
-#define TFT_RST_PIN         8
-
-// Addressable LED Strip
-#define LED_DATA_PIN        7
-
-// EC11 Quadrature Encoders (Direct Interrupts)
-#define ENC1_PHASE_A_PIN    2
-#define ENC1_PHASE_B_PIN    3
-#define ENC2_PHASE_A_PIN    4
-#define ENC2_PHASE_B_PIN    5
-
-// PCF8575 Bitmask Definitions
-#define PCF_MASK_KEYS_LOW   0x00FF // P00 - P07 (Deck Buttons 1 to 8)
-#define PCF_MASK_KEYS_HIGH  0x0F00 // P10 - P13 (Deck Buttons 9 to 12)
-#define PCF_MASK_ENC1_SW    0x3000 // P14 - P15 (EC11 #1 Switch Lines)
-#define PCF_MASK_ENC2_SW    0xC000 // P16 - P17 (EC11 #2 Switch Lines)
+> Bench-verified 2026-10-18: R/G/B/W fill correct, BL driven from GPIO9 (BL current not measured).
