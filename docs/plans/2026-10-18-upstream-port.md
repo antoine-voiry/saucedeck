@@ -46,6 +46,8 @@ Done per phase = `pio test -e native` green and `pio run -e saucedeck -e bringup
 3. **Knob chord** — in `volume_state` or `knob_chord.h`.
    Both switches held → `Sync` once until both released; single press → `Mute` only if the
    other switch was not involved. Tests cover press order and release order.
+   **Done 2026-10-18** (8 tests, `knob_chord.h`). Single knob fires on **release** (upstream fired
+   on press, so a two-knob press could mute before syncing).
 4. **Action map** — `lib/deck_core/src/actions.h`.
    Deck events → action list (`Key`, `Consumer`, `Chord{mods,key}`). `src/main.cpp` only executes
    actions over HID. Mic-mute chord is one constant here.
