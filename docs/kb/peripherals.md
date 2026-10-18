@@ -65,3 +65,4 @@
 - **Rebuild (2026-10-18): LED board (own resistor + cap) on GPIO6, 5V from VBUS. First LED R/G/B order correct, off works. One "off" was ignored while the MCP bus was flaky; fine after reseat — not reproduced.** `[verified: bench 2026-10-18]`
 - **~60 mA per LED full white.** `[verified: common datasheet figure, approx]`
 - **Production firmware drives BL from GPIO9 with `GPIO_DRIVE_CAP_1` (reduced drive) until BL current is measured. Owner accepted the risk 2026-10-18. Drive-cap → mA mapping for S3** `[unverified — check datasheet IO drive table]`
+- **GMT020 in the SAUCEDECK case: Adafruit `setRotation(3)` = upright landscape (1 = upside down).** `[verified: operator, 2026-10-18]`

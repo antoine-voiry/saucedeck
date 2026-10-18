@@ -50,6 +50,7 @@ static void run(const ActionList &actions) {
         Consumer.press(kConsumerCodes[a.value]);
         Consumer.release();
         break;
+      case ActionType::Sync: break;  // local only, no HID report
       case ActionType::MicMute:
         // Release only the chord keys: deck F-keys may still be held
         for (uint8_t k : kMicMuteChord) Keyboard.press(k);
