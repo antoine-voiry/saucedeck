@@ -55,6 +55,7 @@ Done per phase = `pio test -e native` green and `pio run -e saucedeck -e bringup
 5. **Screen model** — `lib/deck_core/src/ui_layout.h`.
    Level → bar fill height, dirty flags (which bar/icon changed), so glue redraws only that region.
    Pure numbers, tested.
+   **Done 2026-10-18** (`ui_layout.h`, 13 tests in `test_ui`). Muted bar keeps its level, drawn grey.
 6. **LCD glue** — `src/display.cpp/.h`, `lib_deps` Adafruit ST7789 + GFX in `[env:saucedeck]`.
    Splash (time-boxed, drawn after `USB.begin()`), two bars + level text, speaker/mic icons with
    mute cross. Blocked on BL current measurement (risk 1).
