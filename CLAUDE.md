@@ -77,7 +77,7 @@ Done = `pio test -e native` green AND `pio run -e saucedeck -e bringup` SUCCESS 
 
 - pioarduino platform (Arduino core 3.x / ESP-IDF 5.x), board `esp32-s3-devkitc-1` + overrides in [platformio.ini](platformio.ini).
 - `ARDUINO_USB_MODE=0` → TinyUSB OTG (needed for HID). `ARDUINO_USB_CDC_ON_BOOT=1` → Serial on same port.
-- Set USB descriptors (`USB.productName`, etc.) BEFORE `USB.begin()`.
+- USB strings = build flags `USB_PRODUCT` / `USB_MANUFACTURER` in platformio.ini. CDC_ON_BOOT=1 → core runs `USB.begin()` before `setup()`, so `USB.productName()` in setup is ignored (docs/kb/toolchain.md).
 - HID: `USBHIDKeyboard` (F13–F24 for keys) + `USBHIDConsumerControl` (media).
 
 ## Status (2026-10-18)
