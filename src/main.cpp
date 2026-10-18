@@ -8,6 +8,7 @@
 #include "debounce.h"
 #include "mcp_io.h"
 #include "quad_decoder.h"
+#include "volume_state.h"
 
 USBHIDKeyboard Keyboard;
 USBHIDConsumerControl Consumer;
@@ -21,6 +22,7 @@ static const uint8_t kButtonKeys[12] = {
 static uint16_t lastPressed = 0;
 static MaskDebouncer debouncer;  // 25 ms settle, matches upstream SauceDeck
 static bool mcpOk = false;
+static VolumeState speaker(16);  // macOS: 16 VOL+/- steps full range (unverified)
 
 static void scanButtons() {
   uint16_t raw;
@@ -37,7 +39,11 @@ static void scanButtons() {
     if (ev.released & bit) Keyboard.release(kButtonKeys[i]);
   }
   // Encoder push switches: mute (enc 1), play/pause (enc 2)
-  if (ev.pressed & DECK_ENC1_SW) { Consumer.press(CONSUMER_CONTROL_MUTE); Consumer.release(); }
+  if (ev.pressed & DECK_ENC1_SW) {
+    Consumer.press(CONSUMER_CONTROL_MUTE);
+    Consumer.release();
+    speaker.toggleMute();
+  }
   if (ev.pressed & DECK_ENC2_SW) { Consumer.press(CONSUMER_CONTROL_PLAY_PAUSE); Consumer.release(); }
 }
 
@@ -65,6 +71,7 @@ void loop() {
   // Encoder 1 -> volume, encoder 2 -> next/previous track
   int d1 = enc1.step(digitalRead(ENC1_PHASE_A_PIN), digitalRead(ENC1_PHASE_B_PIN));
   if (d1) {
+    speaker.rotate(d1);
     Consumer.press(d1 > 0 ? CONSUMER_CONTROL_VOLUME_INCREMENT : CONSUMER_CONTROL_VOLUME_DECREMENT);
     Consumer.release();
   }
