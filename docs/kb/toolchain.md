@@ -12,3 +12,6 @@
 - **Upload via 1200bps touch fails with "Couldn't find a board on the selected port": the SuperMini comes back on the SAME port name, so `wait_for_upload_port` never sees a new port. Workaround: `pio run -e <env> -t upload --upload-port /dev/cu.usbmodem<id>` (works, no BOOT button needed).** `[verified: bench 2026-10-18]`
 - **Arduino-ESP32 3.x `Wire.endTransmission(false)` returns 0 and the following `requestFrom` does the repeated-start read (MCP23017 register read OK).** `[verified: bench 2026-10-18, Wire 3.3.5]`
 - **Native tests 2026-10-18: suites `test_core`, `test_bringup`, `test_mcp` → 39/39.** `[verified: pio test -e native]`
+- **Platform pinned to pioarduino 55.03.35 (release 2025-12-19). Latest on 2026-10-18 = 55.03.312-1, untested here.** `[verified: ~/.platformio/platforms/espressif32/.piopm + GitHub releases API, 2026-10-18]`
+- **`-Wextra` on firmware sources warns in framework header `tinyusb/src/common/tusb_types.h:557` (enum/non-enum in conditional) → firmware `build_src_flags` = `-Wall` only.** `[verified: build output, 2026-10-18]`
+- **`pio check` (cppcheck) default filter skips `lib/` → need `check_src_filters` incl. `lib/deck_core/src/`. `unusedFunction` = false positives (setup/loop, cross-file).** `[verified: pio check output, 2026-10-18]`

@@ -1,0 +1,3 @@
+# Workflow and build changes need owner review
+/.github/      @antoine-voiry
+/platformio.ini @antoine-voiry
