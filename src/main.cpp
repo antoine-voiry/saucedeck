@@ -44,8 +44,7 @@ static void scanButtons() {
 static QuadDecoder enc1(1, 1), enc2(1, 1);
 
 void setup() {
-  USB.manufacturerName("SAUCEDECK");
-  USB.productName("SAUCEDECK");
+  // USB strings: see build_flags (USB already started before setup())
   Keyboard.begin();
   Consumer.begin();
   USB.begin();
