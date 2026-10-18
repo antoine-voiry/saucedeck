@@ -1,0 +1,8 @@
+# PlatformIO is not a Dependabot ecosystem: platform/libs are pinned in platformio.ini
+# and bumped by hand. Dependabot keeps the SHA-pinned workflow actions current.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
