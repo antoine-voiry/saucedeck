@@ -1,6 +1,7 @@
 #include <unity.h>
 #include "quad_decoder.h"
 #include "button_diff.h"
+#include "debounce.h"
 
 void setUp() {}
 void tearDown() {}
@@ -83,6 +84,69 @@ void test_diff_simultaneous_press_and_release() {
   TEST_ASSERT_EQUAL_HEX16(0x0001, e.released);
 }
 
+// --- MaskDebouncer: bit must hold its new level for settleMs before it changes ---
+
+void test_debounce_starts_released() {
+  MaskDebouncer d;
+  TEST_ASSERT_EQUAL_HEX16(0x0000, d.update(0x0000, 0));
+}
+
+void test_debounce_press_needs_settle_time() {
+  MaskDebouncer d(25);
+  d.update(0x0001, 100);
+  TEST_ASSERT_EQUAL_HEX16(0x0000, d.update(0x0001, 124));
+  TEST_ASSERT_EQUAL_HEX16(0x0001, d.update(0x0001, 125));
+}
+
+void test_debounce_bounce_shorter_than_settle_ignored() {
+  MaskDebouncer d(25);
+  d.update(0x0001, 0);
+  d.update(0x0000, 10);
+  d.update(0x0001, 20);
+  TEST_ASSERT_EQUAL_HEX16(0x0000, d.update(0x0001, 30));  // restarted at 20
+  TEST_ASSERT_EQUAL_HEX16(0x0001, d.update(0x0001, 45));
+}
+
+void test_debounce_release_needs_settle_time() {
+  MaskDebouncer d(25);
+  d.update(0x0001, 0);
+  d.update(0x0001, 25);
+  d.update(0x0000, 100);
+  TEST_ASSERT_EQUAL_HEX16(0x0001, d.update(0x0000, 124));
+  TEST_ASSERT_EQUAL_HEX16(0x0000, d.update(0x0000, 125));
+}
+
+void test_debounce_bits_independent() {
+  MaskDebouncer d(25);
+  d.update(0x0001, 0);
+  d.update(0x0003, 10);  // bit 1 starts later
+  TEST_ASSERT_EQUAL_HEX16(0x0001, d.update(0x0003, 25));
+  TEST_ASSERT_EQUAL_HEX16(0x0003, d.update(0x0003, 35));
+}
+
+void test_debounce_single_glitch_all_pressed_ignored() {
+  // Garbage read (e.g. 0x0000 raw -> all deck bits pressed) for one sample must not emit keys
+  MaskDebouncer d(25);
+  d.update(0x0000, 0);
+  d.update(0x3FFF, 1);
+  TEST_ASSERT_EQUAL_HEX16(0x0000, d.update(0x0000, 2));
+  TEST_ASSERT_EQUAL_HEX16(0x0000, d.update(0x0000, 100));
+}
+
+void test_debounce_millis_wrap() {
+  MaskDebouncer d(25);
+  d.update(0x0001, 0xFFFFFFF0u);
+  TEST_ASSERT_EQUAL_HEX16(0x0000, d.update(0x0001, 0x00000008u));  // 24 ms
+  TEST_ASSERT_EQUAL_HEX16(0x0001, d.update(0x0001, 0x00000009u));  // 25 ms
+}
+
+void test_debounce_stable_matches_last_update() {
+  MaskDebouncer d(25);
+  d.update(0x0004, 0);
+  d.update(0x0004, 30);
+  TEST_ASSERT_EQUAL_HEX16(0x0004, d.stable());
+}
+
 int main(int, char **) {
   UNITY_BEGIN();
   RUN_TEST(test_quad_one_detent_cw_returns_plus_one);
@@ -96,5 +160,13 @@ int main(int, char **) {
   RUN_TEST(test_diff_press_detected_on_falling_bit);
   RUN_TEST(test_diff_release_detected_on_rising_bit);
   RUN_TEST(test_diff_simultaneous_press_and_release);
+  RUN_TEST(test_debounce_starts_released);
+  RUN_TEST(test_debounce_press_needs_settle_time);
+  RUN_TEST(test_debounce_bounce_shorter_than_settle_ignored);
+  RUN_TEST(test_debounce_release_needs_settle_time);
+  RUN_TEST(test_debounce_bits_independent);
+  RUN_TEST(test_debounce_single_glitch_all_pressed_ignored);
+  RUN_TEST(test_debounce_millis_wrap);
+  RUN_TEST(test_debounce_stable_matches_last_update);
   return UNITY_END();
 }
