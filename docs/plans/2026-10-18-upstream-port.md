@@ -62,6 +62,11 @@ Done per phase = `pio test -e native` green and `pio run -e saucedeck -e bringup
    reduced drive strength, measure later.
    **Built + flashed 2026-10-18**, not bench-verified. Libs pinned (GFX 1.12.6, BusIO 1.17.4,
    ST7789 1.11.0, seesaw 1.7.9). SPI 20 MHz, rotation constant `kRotation`.
+6b. **LED feedback** (added 2026-10-18, owner request; not in upstream) — `led_effects.h`
+   (16 tests, `test_led`) + `src/leds.cpp`. Per-action flash (key hue, mute amber, mic red,
+   track white, sync green, bus loss orange), knob-1 volume gauge 1.5 s, dim red idle while mic
+   muted. Frame power-limited to 250 mA estimate. `kLedCount` = 16 placeholder (>12, exact count
+   unknown). Flashed, not bench-verified. 3.3 V data margin still open (risk list).
 7. **Encoder ISR** (if bench shows missed detents during redraw) — GPIO change interrupt on
    GPIO1–4 feeding `QuadDecoder`, main loop reads accumulated steps.
 8. **Bench** — flash production firmware, check Mac enumeration as `SAUCEDECK`, every key, both
@@ -128,4 +133,5 @@ cache `~/.platformio`, warnings treated as failures on `deck_core`. Written, not
 5. **LCD init must match kb.** GMT020-02-8P verified sequence: COLMOD 0x55, MADCTL 0x00, INVON.
    Confirm the Adafruit `init(240, 320)` path gives correct colours; if not, send INVON / MADCTL
    after init.
-6. **USB power budget 500 mA.** LCD BL + LEDs share it; LED strip is not part of this port.
+6. **USB power budget 500 mA.** LCD BL + LEDs share it. LED frames capped at 250 mA estimate;
+   check for brownout on the bench with the real LED count (70 µF bulk cap, `docs/kb/peripherals.md`).

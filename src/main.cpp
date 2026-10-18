@@ -6,6 +6,7 @@
 #include "pins.h"
 #include "deck.h"
 #include "display.h"
+#include "leds.h"
 #include "mcp_io.h"
 #include "quad_decoder.h"
 
@@ -39,6 +40,7 @@ static QuadDecoder enc1(1, 1), enc2(1, 1);
 static void run(const ActionList &actions) {
   for (size_t i = 0; i < actions.count; i++) {
     const Action &a = actions.items[i];
+    ledsOnAction(a, millis());
     switch (a.type) {
       case ActionType::KeyDown: Keyboard.press(kButtonKeys[a.value]); break;
       case ActionType::KeyUp: Keyboard.release(kButtonKeys[a.value]); break;
@@ -79,6 +81,7 @@ void setup() {
   Serial.begin(115200);
 
   displayBegin();
+  ledsBegin();
   Wire.begin(I2C_SDA_PIN, I2C_SCL_PIN, 400000);
   mcpOk = mcpBegin();
 
@@ -99,4 +102,5 @@ void loop() {
 
   const VolumeState &spk = deck.speaker();
   displayUpdate({spk.percent(), spk.muted(), deck.micMuted()}, millis());
+  ledsUpdate({spk.percent(), spk.muted(), deck.micMuted()}, millis());
 }
