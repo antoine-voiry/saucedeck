@@ -5,6 +5,7 @@
 #include "USBHIDConsumerControl.h"
 #include "pins.h"
 #include "button_diff.h"
+#include "debounce.h"
 #include "mcp_io.h"
 #include "quad_decoder.h"
 
@@ -18,6 +19,7 @@ static const uint8_t kButtonKeys[12] = {
 };
 
 static uint16_t lastPressed = 0;
+static MaskDebouncer debouncer;  // 25 ms settle, matches upstream SauceDeck
 static bool mcpOk = false;
 
 static void scanButtons() {
@@ -25,7 +27,7 @@ static void scanButtons() {
   if (!mcpOk) mcpOk = mcpBegin();  // retry until the expander answers
   if (!mcpOk || !mcpReadRaw(raw)) { mcpOk = false; return; }
 
-  uint16_t now = deckPressed(raw);
+  uint16_t now = debouncer.update(deckPressed(raw), millis());
   ButtonEvents ev = diffButtons(~lastPressed, ~now);  // diffButtons expects active-low
   lastPressed = now;
 

@@ -36,6 +36,9 @@ Done per phase = `pio test -e native` green and `pio run -e saucedeck -e bringup
    16-bit mask debouncer, time passed in (`update(raw, nowMs)`). Tests: bounce shorter than 25 ms
    ignored, stable press → one event, release, independent bits, `millis()` wrap.
    Wire: `scanButtons()` feeds debounced mask to `diffButtons`.
+   **Done 2026-10-18** (8 tests). Not bench-verified.
+   Found: if the MCP bus drops while a key is held, `scanButtons()` returns early and the host
+   keeps that key pressed (stuck F-key). Fix in phase 4 (action map): bus loss → release all.
 2. **Volume / mute model** — `lib/deck_core/src/volume_state.h`, new suite `test_volume`.
    Level 0–100, step per detent configurable (host-dependent, see risks), clamp, mute toggle,
    rotate-up while muted unmutes (matches macOS behaviour, unverified), sync reset.
