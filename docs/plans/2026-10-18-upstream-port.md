@@ -37,8 +37,7 @@ Done per phase = `pio test -e native` green and `pio run -e saucedeck -e bringup
    ignored, stable press → one event, release, independent bits, `millis()` wrap.
    Wire: `scanButtons()` feeds debounced mask to `diffButtons`.
    **Done 2026-10-18** (8 tests). Not bench-verified.
-   Found: if the MCP bus drops while a key is held, `scanButtons()` returns early and the host
-   keeps that key pressed (stuck F-key). Fix in phase 4 (action map): bus loss → release all.
+   Found: MCP bus drop while a key is held → stuck F-key on host. Fixed in phase 4.
 2. **Volume / mute model** — `lib/deck_core/src/volume_state.h`, new suite `test_volume`.
    Level 0–100, step per detent configurable (host-dependent, see risks), clamp, mute toggle,
    rotate-up while muted unmutes (matches macOS behaviour, unverified), sync reset.
@@ -50,7 +49,9 @@ Done per phase = `pio test -e native` green and `pio run -e saucedeck -e bringup
    on press, so a two-knob press could mute before syncing).
 4. **Action map** — `lib/deck_core/src/actions.h`.
    Deck events → action list (`Key`, `Consumer`, `Chord{mods,key}`). `src/main.cpp` only executes
-   actions over HID. Mic-mute chord is one constant here.
+   actions over HID. Mic-mute chord is one constant in `src/main.cpp`.
+   **Done 2026-10-18** (`deck.h`, 14 tests in `test_deck`). Includes stuck-key fix: bus lost →
+   `ReleaseAll` once, knob state reset without firing, held keys press again when bus returns.
 5. **Screen model** — `lib/deck_core/src/ui_layout.h`.
    Level → bar fill height, dirty flags (which bar/icon changed), so glue redraws only that region.
    Pure numbers, tested.
