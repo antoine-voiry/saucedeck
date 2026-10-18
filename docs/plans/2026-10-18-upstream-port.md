@@ -42,6 +42,7 @@ Done per phase = `pio test -e native` green and `pio run -e saucedeck -e bringup
 2. **Volume / mute model** — `lib/deck_core/src/volume_state.h`, new suite `test_volume`.
    Level 0–100, step per detent configurable (host-dependent, see risks), clamp, mute toggle,
    rotate-up while muted unmutes (matches macOS behaviour, unverified), sync reset.
+   **Done 2026-10-18** (11 tests). Level kept in host steps (macOS 16, unverified), % derived.
 3. **Knob chord** — in `volume_state` or `knob_chord.h`.
    Both switches held → `Sync` once until both released; single press → `Mute` only if the
    other switch was not involved. Tests cover press order and release order.
