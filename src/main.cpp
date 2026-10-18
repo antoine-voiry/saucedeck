@@ -5,6 +5,7 @@
 #include "USBHIDConsumerControl.h"
 #include "pins.h"
 #include "deck.h"
+#include "display.h"
 #include "mcp_io.h"
 #include "quad_decoder.h"
 
@@ -76,6 +77,7 @@ void setup() {
   USB.begin();
   Serial.begin(115200);
 
+  displayBegin();
   Wire.begin(I2C_SDA_PIN, I2C_SCL_PIN, 400000);
   mcpOk = mcpBegin();
 
@@ -93,4 +95,7 @@ void loop() {
   int d2 = enc2.step(digitalRead(ENC2_PHASE_A_PIN), digitalRead(ENC2_PHASE_B_PIN));
   if (d1 || d2) deck.onEncoders(d1, d2, actions);
   run(actions);
+
+  const VolumeState &spk = deck.speaker();
+  displayUpdate({spk.percent(), spk.muted(), deck.micMuted()}, millis());
 }

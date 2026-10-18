@@ -64,3 +64,4 @@
 - **Cheap margin fix without shifter: power first LED from 5V via 1N4148/1N4001 drop (~4.3V → VIH ≈ 3.0V), it re-drives clean 5V data to rest.** `[unverified — bench check]`
 - **Rebuild (2026-10-18): LED board (own resistor + cap) on GPIO6, 5V from VBUS. First LED R/G/B order correct, off works. One "off" was ignored while the MCP bus was flaky; fine after reseat — not reproduced.** `[verified: bench 2026-10-18]`
 - **~60 mA per LED full white.** `[verified: common datasheet figure, approx]`
+- **Production firmware drives BL from GPIO9 with `GPIO_DRIVE_CAP_1` (reduced drive) until BL current is measured. Owner accepted the risk 2026-10-18. Drive-cap → mA mapping for S3** `[unverified — check datasheet IO drive table]`

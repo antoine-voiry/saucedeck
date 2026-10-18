@@ -58,7 +58,10 @@ Done per phase = `pio test -e native` green and `pio run -e saucedeck -e bringup
    **Done 2026-10-18** (`ui_layout.h`, 13 tests in `test_ui`). Muted bar keeps its level, drawn grey.
 6. **LCD glue** — `src/display.cpp/.h`, `lib_deps` Adafruit ST7789 + GFX in `[env:saucedeck]`.
    Splash (time-boxed, drawn after `USB.begin()`), two bars + level text, speaker/mic icons with
-   mute cross. Blocked on BL current measurement (risk 1).
+   mute cross. ~~Blocked on BL current measurement~~ owner accepted risk 2026-10-18: GPIO9 with
+   reduced drive strength, measure later.
+   **Built + flashed 2026-10-18**, not bench-verified. Libs pinned (GFX 1.12.6, BusIO 1.17.4,
+   ST7789 1.11.0, seesaw 1.7.9). SPI 20 MHz, rotation constant `kRotation`.
 7. **Encoder ISR** (if bench shows missed detents during redraw) — GPIO change interrupt on
    GPIO1–4 feeding `QuadDecoder`, main loop reads accumulated steps.
 8. **Bench** — flash production firmware, check Mac enumeration as `SAUCEDECK`, every key, both
