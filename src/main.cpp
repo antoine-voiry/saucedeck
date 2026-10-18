@@ -6,6 +6,7 @@
 #include "pins.h"
 #include "button_diff.h"
 #include "debounce.h"
+#include "knob_chord.h"
 #include "mcp_io.h"
 #include "quad_decoder.h"
 #include "volume_state.h"
@@ -22,6 +23,7 @@ static const uint8_t kButtonKeys[12] = {
 static uint16_t lastPressed = 0;
 static MaskDebouncer debouncer;  // 25 ms settle, matches upstream SauceDeck
 static bool mcpOk = false;
+static KnobChord knobs(DECK_ENC1_SW, DECK_ENC2_SW);
 static VolumeState speaker(16);  // macOS: 16 VOL+/- steps full range (unverified)
 
 static void scanButtons() {
@@ -38,13 +40,15 @@ static void scanButtons() {
     if (ev.pressed & bit)  Keyboard.press(kButtonKeys[i]);
     if (ev.released & bit) Keyboard.release(kButtonKeys[i]);
   }
-  // Encoder push switches: mute (enc 1), play/pause (enc 2)
-  if (ev.pressed & DECK_ENC1_SW) {
+  // Knob switches (fire on release): mute (knob 1), play/pause (knob 2); both = sync
+  uint8_t chord = knobs.update(now);
+  if (chord & CHORD_KNOB1) {
     Consumer.press(CONSUMER_CONTROL_MUTE);
     Consumer.release();
     speaker.toggleMute();
   }
-  if (ev.pressed & DECK_ENC2_SW) { Consumer.press(CONSUMER_CONTROL_PLAY_PAUSE); Consumer.release(); }
+  if (chord & CHORD_KNOB2) { Consumer.press(CONSUMER_CONTROL_PLAY_PAUSE); Consumer.release(); }
+  if (chord & CHORD_SYNC) speaker.sync();  // user has set the host to 0 % first
 }
 
 static QuadDecoder enc1(1, 1), enc2(1, 1);

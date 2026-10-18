@@ -1,5 +1,6 @@
 #include <unity.h>
 #include "volume_state.h"
+#include "knob_chord.h"
 
 void setUp() {}
 void tearDown() {}
@@ -97,6 +98,66 @@ void test_volume_zero_max_does_not_divide_by_zero() {
   TEST_ASSERT_EQUAL_UINT8(100, v.percent());
 }
 
+// --- KnobChord: knob switch alone -> action on release; both held -> SYNC once ---
+
+static const uint16_t S1 = 1u << 12, S2 = 1u << 13;
+
+void test_chord_single_knob_fires_on_release() {
+  KnobChord c(S1, S2);
+  TEST_ASSERT_EQUAL_HEX8(CHORD_NONE, c.update(S1));
+  TEST_ASSERT_EQUAL_HEX8(CHORD_NONE, c.update(S1));
+  TEST_ASSERT_EQUAL_HEX8(CHORD_KNOB1, c.update(0));
+}
+
+void test_chord_knob2_alone() {
+  KnobChord c(S1, S2);
+  c.update(S2);
+  TEST_ASSERT_EQUAL_HEX8(CHORD_KNOB2, c.update(0));
+}
+
+void test_chord_both_pressed_fires_sync_once() {
+  KnobChord c(S1, S2);
+  c.update(S1);
+  TEST_ASSERT_EQUAL_HEX8(CHORD_SYNC, c.update(S1 | S2));
+  TEST_ASSERT_EQUAL_HEX8(CHORD_NONE, c.update(S1 | S2));
+}
+
+void test_chord_releases_after_sync_fire_nothing() {
+  KnobChord c(S1, S2);
+  c.update(S1 | S2);
+  TEST_ASSERT_EQUAL_HEX8(CHORD_NONE, c.update(S2));  // knob 1 up first
+  TEST_ASSERT_EQUAL_HEX8(CHORD_NONE, c.update(0));
+}
+
+void test_chord_simultaneous_release_after_sync() {
+  KnobChord c(S1, S2);
+  c.update(S1 | S2);
+  TEST_ASSERT_EQUAL_HEX8(CHORD_NONE, c.update(0));
+}
+
+void test_chord_rearms_after_both_released() {
+  KnobChord c(S1, S2);
+  c.update(S1 | S2);
+  c.update(0);
+  c.update(S1);
+  TEST_ASSERT_EQUAL_HEX8(CHORD_KNOB1, c.update(0));
+}
+
+void test_chord_still_held_partner_blocks_single_action() {
+  // After sync, knob 2 still held, knob 1 pressed again and released: still part of the chord
+  KnobChord c(S1, S2);
+  c.update(S1 | S2);
+  c.update(S2);
+  c.update(S1 | S2);
+  TEST_ASSERT_EQUAL_HEX8(CHORD_NONE, c.update(S2));
+}
+
+void test_chord_ignores_other_bits() {
+  KnobChord c(S1, S2);
+  TEST_ASSERT_EQUAL_HEX8(CHORD_NONE, c.update(0x0FFF));
+  TEST_ASSERT_EQUAL_HEX8(CHORD_NONE, c.update(0));
+}
+
 int main(int, char **) {
   UNITY_BEGIN();
   RUN_TEST(test_volume_starts_at_zero_unmuted);
@@ -110,5 +171,13 @@ int main(int, char **) {
   RUN_TEST(test_volume_down_while_muted_stays_muted);
   RUN_TEST(test_volume_sync_resets_to_zero_unmuted);
   RUN_TEST(test_volume_zero_max_does_not_divide_by_zero);
+  RUN_TEST(test_chord_single_knob_fires_on_release);
+  RUN_TEST(test_chord_knob2_alone);
+  RUN_TEST(test_chord_both_pressed_fires_sync_once);
+  RUN_TEST(test_chord_releases_after_sync_fire_nothing);
+  RUN_TEST(test_chord_simultaneous_release_after_sync);
+  RUN_TEST(test_chord_rearms_after_both_released);
+  RUN_TEST(test_chord_still_held_partner_blocks_single_action);
+  RUN_TEST(test_chord_ignores_other_bits);
   return UNITY_END();
 }
