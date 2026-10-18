@@ -6,8 +6,8 @@
 #include "driver/gpio.h"
 #include "pins.h"
 
-// 240x320 panel, landscape. Flip to 3 if the screen is upside down in the case.
-static constexpr uint8_t kRotation = 1;
+// 240x320 panel, landscape. 1 was upside down in the case (bench 2026-10-18) -> 3.
+static constexpr uint8_t kRotation = 3;
 static constexpr uint32_t kSpiHz = 20000000;  // bench-verified (docs/kb/peripherals.md)
 static constexpr uint32_t kSplashMs = 1500;
 static constexpr uint32_t kMinFrameMs = 30;  // batch fast knob turns into one redraw

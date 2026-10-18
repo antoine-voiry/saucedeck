@@ -7,7 +7,8 @@
 #include "volume_state.h"
 
 // HID-agnostic actions. src/ maps them to real reports (F13+index, consumer codes, chords).
-enum class ActionType : uint8_t { KeyDown, KeyUp, ReleaseAll, Consumer, MicMute };
+// Sync is local only (state re-aligned, no HID report); src/ uses it for feedback.
+enum class ActionType : uint8_t { KeyDown, KeyUp, ReleaseAll, Consumer, MicMute, Sync };
 enum class ConsumerCode : uint8_t { Mute, VolumeUp, VolumeDown, NextTrack, PrevTrack };
 
 struct Action {
@@ -53,6 +54,7 @@ class Deck {
     if (chord & CHORD_SYNC) {  // user set host volume to 0 % and mic unmuted first
       speaker_.sync();
       micMuted_ = false;
+      out.push(ActionType::Sync);
     }
   }
 
