@@ -21,3 +21,13 @@ cmd M #4: GPA2 (key 10) DOWN/UP x3 clean (3277, 5923, 9307 ms) among other keys.
    2026-10-18 I2C contact fault). Action: reflow key 10 joints + GPA2 header pin.
    Also seen: GPA4 (key 5) chatter DOWN/UP/DOWN within 1 ms at release; 25 ms debounce covers it.
 Production firmware restored after the session.
+
+== Keys 10 + 12 intermittent (operator: multimeter "looks fine") ==
+Test protocol bug found: monitor started only after Claude's reply -> presses before the window.
+Empty runs M #2/#3/A/B are therefore inconclusive. Fixed: monitor started in background first.
+cmd M x2 (60 s, background): GPB0 (key 1, control) DOWN/UP x4 at 5.8-8.9 s; then ~21 s with
+   no events although operator was asked to press key 10 x10 and key 12 x10.
+-> keys 10 (GPA2) + 12 (GPA0) open at that time; bus healthy (cmd d 40/40 before).
+Suspect: shared key GND chain broken/cracked near its end (keys 10-12), opens under flex;
+   alternative: MCP header pins GPA0/GPA2. Next: continuity key 10/12 leg 2 -> MCP GND while
+   pressing/flexing; jumper key 10 leg 2 straight to GND.
