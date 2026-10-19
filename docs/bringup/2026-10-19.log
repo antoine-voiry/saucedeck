@@ -40,3 +40,11 @@ cmd M x2 (60 s, background). Operator: key 10 x5, key 12 x5, knob 2 3+3 clicks.
   no GPA2 / GPA0 events. GPB5 (knob 2 sw) x2. ENC2 CCW x4, CW x4 clean. ENC1 moved too (bumped).
 -> keys 10/12 now land on key 5/6 lines (or operator numbering differs). Asked operator which
    MCP pins were used and whether keys 5/6 still work alone. Bringup firmware left loaded.
+
+== Key map after rewire (cmd M x2, operator pressed 1..12, knob sw 1, 2, then each knob CW) ==
+positions 1-4: GPB0 GPB1 GPB2 GPB3 | 5-7: GPA3 GPA2 GPA1 | 8: GPB6 | 9-11: GPA4 GPA5 GPA6 | 12: none
+knob 1 sw GPB4, knob 2 sw GPB5. ENC1 CW x3 (for 2 clicks, over-count again), ENC2 CW x2.
+GPA3 chatter DOWN/UP/DOWN in 2 ms.
+-> rows 5-7 and 9-11 swapped vs wiring.md. Map updated (mcp23017.cpp + tests + wiring.md).
+   Key 12 still open; GPA0 = only free input, assumed. Production firmware reflashed.
+TODO: key 12 contact/joint; ENC1 over-count (3 for 2 clicks) on PCNT firmware.
