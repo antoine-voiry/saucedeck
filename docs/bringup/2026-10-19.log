@@ -14,3 +14,10 @@ cmd M #2 (operator pressed only the broken key x3, slowly): no events at all.
 -> key 10 press never pulls any MCP input LOW = open circuit: switch, GPA2 wire, or its GND leg.
    2026-10-18 log: GPA2 worked -> new mechanical fault since then.
 Next: jumper GPA2 -> GND during cmd M (isolates MCP vs key side), then continuity checks.
+cmd M #3 (no events; operator action unclear).
+cmd M #4: GPA2 (key 10) DOWN/UP x3 clean (3277, 5923, 9307 ms) among other keys.
+-> key 10 is INTERMITTENT, not dead: dead in M #2/#3, fine in M #4. Mechanical: suspect
+   cracked solder joint on key 10 legs or GPA2 header pin (same module header as the
+   2026-10-18 I2C contact fault). Action: reflow key 10 joints + GPA2 header pin.
+   Also seen: GPA4 (key 5) chatter DOWN/UP/DOWN within 1 ms at release; 25 ms debounce covers it.
+Production firmware restored after the session.
