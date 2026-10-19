@@ -17,8 +17,8 @@ void test_idle_reads_nothing_pressed() {
 // Physical key order (bench 2026-10-18): position 1..12 -> MCP pin.
 static const uint16_t kPhysical[12] = {
     GPB(0), GPB(1), GPB(2), GPB(3),  // positions 1-4
-    GPA(4), GPA(5), GPA(6), GPB(6),  // positions 5-8
-    GPA(3), GPA(2), GPA(1), GPA(0),  // positions 9-12
+    GPA(3), GPA(2), GPA(1), GPB(6),  // positions 5-8  (rewired 2026-10-19)
+    GPA(4), GPA(5), GPA(6), GPA(0),  // positions 9-12 (rewired 2026-10-19; 12 = GPA0 assumed)
 };
 
 void test_keys_follow_physical_order() {
@@ -62,9 +62,9 @@ void test_register_addresses_bank0() {
 void test_pin_names_follow_deck_bits() {
   TEST_ASSERT_EQUAL_STRING("GPB0", deckPinName(0));
   TEST_ASSERT_EQUAL_STRING("GPB3", deckPinName(3));
-  TEST_ASSERT_EQUAL_STRING("GPA4", deckPinName(4));
+  TEST_ASSERT_EQUAL_STRING("GPA3", deckPinName(4));
   TEST_ASSERT_EQUAL_STRING("GPB6", deckPinName(7));
-  TEST_ASSERT_EQUAL_STRING("GPA3", deckPinName(8));
+  TEST_ASSERT_EQUAL_STRING("GPA4", deckPinName(8));
   TEST_ASSERT_EQUAL_STRING("GPA0", deckPinName(11));
   TEST_ASSERT_EQUAL_STRING("GPB4", deckPinName(12));
   TEST_ASSERT_EQUAL_STRING("GPB5", deckPinName(13));

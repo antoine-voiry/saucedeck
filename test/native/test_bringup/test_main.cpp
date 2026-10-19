@@ -1,5 +1,6 @@
 #include <string.h>
 #include <unity.h>
+#include "mcp23017.h"
 #include "bringup.h"
 
 void setUp() {}
@@ -133,7 +134,7 @@ void test_describe_pass() {
 
 void test_describe_wrong_button_names_pin() {
   describeResult(kSteps[0], {Verdict::Fail, 0x0020, 0, 0}, buf, sizeof buf);
-  TEST_ASSERT_NOT_NULL(strstr(buf, "GPA5"));
+  TEST_ASSERT_NOT_NULL(strstr(buf, deckPinName(5)));  // pin follows the key map
   TEST_ASSERT_NOT_NULL(strstr(buf, "crossed"));
 }
 
