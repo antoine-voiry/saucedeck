@@ -66,7 +66,7 @@ class LedEffects {
     if (gauge_ && nowMs - gaugeStart_ >= kGaugeMs) gauge_ = false;
     if (flash_ && nowMs - flashStart_ >= kFlashMs) flash_ = false;
 
-    const Rgb base = in.micMuted ? Rgb{16, 0, 0} : Rgb{0, 4, 12};
+    const Rgb base = in.micMuted ? Rgb{4, 0, 0} : Rgb{0, 1, 3};  // bench: brighter was too much
     size_t lit = (static_cast<size_t>(in.volumePercent > 100 ? 100 : in.volumePercent) * n + 50) / 100;
     const Rgb gaugeOn = in.speakerMuted ? Rgb{60, 60, 60} : Rgb{0, 180, 180};
 
