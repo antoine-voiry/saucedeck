@@ -111,14 +111,14 @@ cache `~/.platformio`, warnings treated as failures on `deck_core`. Written, not
 | Item | Current state | Action |
 | --- | --- | --- |
 | Supply chain: platform | `stable` URL = moving target | Done 2026-10-18: pinned to 55.03.35 (installed, bench-verified build) |
-| Supply chain: libs | none yet; Adafruit libs arrive in phase 6 | Pin exact versions in `lib_deps` (`@x.y.z`), commit lockfile-equivalent notes |
-| Attack surface: radios | Wi-Fi/BT unused | Never init Wi-Fi/BT; check no `WiFi.h`/`BLE` linked (map file check in CI step) |
+| Supply chain: libs | Adafruit GFX/BusIO/ST7789/seesaw/NeoPixel | Done: exact versions in `lib_deps`. SD (transitive, unlinked) can't be pinned, see kb |
+| Attack surface: radios | Wi-Fi/BT unused | Done 2026-10-19: `tools/check_no_radio.sh` (nm on ELF) in CI; 0 radio init symbols today |
 | Attack surface: USB | HID keyboard + CDC serial | Production CDC: no command interpreter, no debug shell. Bench commands stay in `bringup` env only |
 | HID injection | Device types keys on host | Only fixed F13–F24 / consumer / one mute chord. No typed strings, no runtime-configurable macros without auth |
 | Secrets | none | Done: gitleaks pre-commit + CI |
 | Firmware integrity | plain flash, anyone with USB can reflash (1200 bps touch) | Decision needed: Secure Boot v2 + flash encryption. **eFuse burns are irreversible**, can brick dev loop, and must not touch `STRAP_JTAG_SEL`. Recommend: document risk, defer until hardware final |
 | Build hygiene | `-Wall -Wextra` on native only | Done 2026-10-18: firmware `src/` gets `-Wall` (`-Wextra` trips a TinyUSB framework header), native `deck_core` gets `-Wall -Wextra -Werror`, cppcheck gate at medium |
-| Input robustness | MCP read failure handled by retry | Tests: bad/garbage MCP reads never emit key events (fuzz-style unit test on `deckPressed` + debounce) |
+| Input robustness | MCP read failure handled by retry | Done: one-sample garbage read emits nothing (debounce test); bus loss releases all keys (test_deck) |
 | Vulnerability handling | none | Done: `SECURITY.md` |
 
 ## Hardware / host risks
