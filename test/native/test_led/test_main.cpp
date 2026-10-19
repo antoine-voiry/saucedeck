@@ -44,7 +44,8 @@ void test_idle_is_dim_not_off_not_bright() {
   Rgb px[N];
   e.render(kIdle, 10000, px, N);
   TEST_ASSERT_FALSE(isOff(px[0]));
-  TEST_ASSERT_TRUE(px[0].r < 32 && px[0].g < 32 && px[0].b < 32);
+  // Bench 2026-10-19: {0,4,12} was too bright at idle -> keep every channel <= 4
+  TEST_ASSERT_TRUE(px[0].r <= 4 && px[0].g <= 4 && px[0].b <= 4);
   TEST_ASSERT_TRUE(allEqual(px, N, px[0]));
 }
 
@@ -52,7 +53,7 @@ void test_mic_muted_idle_is_red() {
   LedEffects e;
   Rgb px[N];
   e.render({50, false, true}, 10000, px, N);
-  TEST_ASSERT_TRUE(px[0].r > 0);
+  TEST_ASSERT_TRUE(px[0].r > 0 && px[0].r <= 4);
   TEST_ASSERT_EQUAL_UINT8(0, px[0].g);
   TEST_ASSERT_EQUAL_UINT8(0, px[0].b);
 }
