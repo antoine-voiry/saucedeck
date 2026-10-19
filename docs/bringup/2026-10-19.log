@@ -47,4 +47,4 @@ knob 1 sw GPB4, knob 2 sw GPB5. ENC1 CW x3 (for 2 clicks, over-count again), ENC
 GPA3 chatter DOWN/UP/DOWN in 2 ms.
 -> rows 5-7 and 9-11 swapped vs wiring.md. Map updated (mcp23017.cpp + tests + wiring.md).
    Key 12 still open; GPA0 = only free input, assumed. Production firmware reflashed.
-TODO: key 12 contact/joint; ENC1 over-count (3 for 2 clicks) on PCNT firmware.
+TODO: key 12 contact/joint; ENC1 over-count (3 for 2 clicks) seen on bringup (polled QuadDecoder), check on PCNT production firmware.
