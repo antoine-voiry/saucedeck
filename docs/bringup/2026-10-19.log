@@ -31,3 +31,12 @@ cmd M x2 (60 s, background): GPB0 (key 1, control) DOWN/UP x4 at 5.8-8.9 s; then
 Suspect: shared key GND chain broken/cracked near its end (keys 10-12), opens under flex;
    alternative: MCP header pins GPA0/GPA2. Next: continuity key 10/12 leg 2 -> MCP GND while
    pressing/flexing; jumper key 10 leg 2 straight to GND.
+
+== After operator rewire (keys 10/12) ==
+cmd i: PASS ACK 0x27, idle 0x7F7F. cmd d: 40/40 all gaps. ENC2 idle A=0 B=1 (x3) -> was between detents: A=1 B=1 after test.
+cmd M x2 (60 s, background). Operator: key 10 x5, key 12 x5, knob 2 3+3 clicks.
+  "key 10" -> GPA4 DOWN x3 (one chatter DOWN/UP/DOWN in 2 ms)   [GPA4 = key 5 per wiring.md]
+  "key 12" -> GPA5 DOWN x5 clean                                 [GPA5 = key 6 per wiring.md]
+  no GPA2 / GPA0 events. GPB5 (knob 2 sw) x2. ENC2 CCW x4, CW x4 clean. ENC1 moved too (bumped).
+-> keys 10/12 now land on key 5/6 lines (or operator numbering differs). Asked operator which
+   MCP pins were used and whether keys 5/6 still work alone. Bringup firmware left loaded.
