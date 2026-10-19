@@ -65,8 +65,7 @@ Done per phase = `pio test -e native` green and `pio run -e saucedeck -e bringup
 6b. **LED feedback** (added 2026-10-18, owner request; not in upstream) — `led_effects.h`
    (16 tests, `test_led`) + `src/leds.cpp`. Per-action flash (key hue, mute amber, mic red,
    track white, sync green, bus loss orange), knob-1 volume gauge 1.5 s, dim red idle while mic
-   muted. Frame power-limited to 250 mA estimate. `kLedCount` = 16 placeholder (>12, exact count
-   unknown). Flashed, not bench-verified. 3.3 V data margin still open (risk list).
+   muted. Frame power-limited to 250 mA estimate. `kLedCount` = 16 (confirmed by owner 2026-10-19). Flashed, not bench-verified. 3.3 V data margin still open (risk list).
 7. **Encoder hardware decode** — done 2026-10-19 via ESP32-S3 PCNT instead of an ISR: zero CPU,
    no lost edges during SPI redraws (estimated 2–7 ms stalls vs 2.5–5 ms per EC11 edge when
    spun fast). `detent_counter.h` (6 tests) turns the x4 count into detents. Polled
