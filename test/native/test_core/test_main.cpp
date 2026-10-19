@@ -2,6 +2,7 @@
 #include "quad_decoder.h"
 #include "button_diff.h"
 #include "debounce.h"
+#include "detent_counter.h"
 
 void setUp() {}
 void tearDown() {}
@@ -147,6 +148,46 @@ void test_debounce_stable_matches_last_update() {
   TEST_ASSERT_EQUAL_HEX16(0x0004, d.stable());
 }
 
+// --- DetentCounter: PCNT x4 running count -> detents (EC11: 4 counts per detent) ---
+
+void test_detent_four_counts_one_detent() {
+  DetentCounter d(4);
+  TEST_ASSERT_EQUAL_INT(0, d.update(3));
+  TEST_ASSERT_EQUAL_INT(1, d.update(4));
+}
+
+void test_detent_negative_direction() {
+  DetentCounter d(4);
+  TEST_ASSERT_EQUAL_INT(-1, d.update(-4));
+}
+
+void test_detent_many_at_once() {
+  // Fast spin between two loop passes: hardware counted everything
+  DetentCounter d(4);
+  TEST_ASSERT_EQUAL_INT(3, d.update(13));
+  TEST_ASSERT_EQUAL_INT(0, d.update(14));
+  TEST_ASSERT_EQUAL_INT(1, d.update(16));
+}
+
+void test_detent_bounce_back_and_forth_cancels() {
+  DetentCounter d(4);
+  TEST_ASSERT_EQUAL_INT(0, d.update(2));
+  TEST_ASSERT_EQUAL_INT(0, d.update(-1));
+  TEST_ASSERT_EQUAL_INT(0, d.update(1));
+}
+
+void test_detent_reverse_after_partial() {
+  DetentCounter d(4);
+  d.update(2);
+  TEST_ASSERT_EQUAL_INT(-1, d.update(-4));  // -4 from the last detent boundary (0)
+}
+
+void test_detent_starts_from_nonzero_total() {
+  DetentCounter d(4, 100);  // reference = count at init
+  TEST_ASSERT_EQUAL_INT(0, d.update(103));
+  TEST_ASSERT_EQUAL_INT(1, d.update(104));
+}
+
 int main(int, char **) {
   UNITY_BEGIN();
   RUN_TEST(test_quad_one_detent_cw_returns_plus_one);
@@ -168,5 +209,11 @@ int main(int, char **) {
   RUN_TEST(test_debounce_single_glitch_all_pressed_ignored);
   RUN_TEST(test_debounce_millis_wrap);
   RUN_TEST(test_debounce_stable_matches_last_update);
+  RUN_TEST(test_detent_four_counts_one_detent);
+  RUN_TEST(test_detent_negative_direction);
+  RUN_TEST(test_detent_many_at_once);
+  RUN_TEST(test_detent_bounce_back_and_forth_cancels);
+  RUN_TEST(test_detent_reverse_after_partial);
+  RUN_TEST(test_detent_starts_from_nonzero_total);
   return UNITY_END();
 }

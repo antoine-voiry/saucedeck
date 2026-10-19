@@ -8,7 +8,7 @@
 #include "display.h"
 #include "leds.h"
 #include "mcp_io.h"
-#include "quad_decoder.h"
+#include "encoders.h"
 
 USBHIDKeyboard Keyboard;
 USBHIDConsumerControl Consumer;
@@ -35,7 +35,6 @@ static_assert(sizeof(kConsumerCodes) / sizeof(kConsumerCodes[0]) ==
 
 static Deck deck(16);  // macOS: 16 VOL+/- steps full range (unverified)
 static bool mcpOk = false;
-static QuadDecoder enc1(1, 1), enc2(1, 1);
 
 static void run(const ActionList &actions) {
   for (size_t i = 0; i < actions.count; i++) {
@@ -85,18 +84,15 @@ void setup() {
   Wire.begin(I2C_SDA_PIN, I2C_SCL_PIN, 400000);
   mcpOk = mcpBegin();
 
-  for (uint8_t pin : {ENC1_PHASE_A_PIN, ENC1_PHASE_B_PIN, ENC2_PHASE_A_PIN, ENC2_PHASE_B_PIN})
-    pinMode(pin, INPUT_PULLUP);
-  enc1 = QuadDecoder(digitalRead(ENC1_PHASE_A_PIN), digitalRead(ENC1_PHASE_B_PIN));
-  enc2 = QuadDecoder(digitalRead(ENC2_PHASE_A_PIN), digitalRead(ENC2_PHASE_B_PIN));
+  encodersBegin();
 }
 
 void loop() {
   ActionList actions;
   scanButtons(actions);
   // Knob 1 -> volume, knob 2 -> next/previous track
-  int d1 = enc1.step(digitalRead(ENC1_PHASE_A_PIN), digitalRead(ENC1_PHASE_B_PIN));
-  int d2 = enc2.step(digitalRead(ENC2_PHASE_A_PIN), digitalRead(ENC2_PHASE_B_PIN));
+  int d1, d2;
+  encodersRead(d1, d2);
   if (d1 || d2) deck.onEncoders(d1, d2, actions);
   run(actions);
 
