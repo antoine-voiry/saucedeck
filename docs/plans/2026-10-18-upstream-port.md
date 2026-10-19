@@ -67,8 +67,11 @@ Done per phase = `pio test -e native` green and `pio run -e saucedeck -e bringup
    track white, sync green, bus loss orange), knob-1 volume gauge 1.5 s, dim red idle while mic
    muted. Frame power-limited to 250 mA estimate. `kLedCount` = 16 placeholder (>12, exact count
    unknown). Flashed, not bench-verified. 3.3 V data margin still open (risk list).
-7. **Encoder ISR** (if bench shows missed detents during redraw) — GPIO change interrupt on
-   GPIO1–4 feeding `QuadDecoder`, main loop reads accumulated steps.
+7. **Encoder hardware decode** — done 2026-10-19 via ESP32-S3 PCNT instead of an ISR: zero CPU,
+   no lost edges during SPI redraws (estimated 2–7 ms stalls vs 2.5–5 ms per EC11 edge when
+   spun fast). `detent_counter.h` (6 tests) turns the x4 count into detents. Polled
+   `QuadDecoder` stays as fallback if PCNT setup fails. Flashed, not bench-verified
+   (direction derived from the verified QuadDecoder table).
 8. **Bench** — flash production firmware, check Mac enumeration as `SAUCEDECK`, every key, both
    knobs, mute/sync, screen. Log in `docs/bringup/`, facts into `docs/kb/`.
 
