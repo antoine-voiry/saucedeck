@@ -66,3 +66,4 @@
 - **~60 mA per LED full white.** `[verified: common datasheet figure, approx]`
 - **Production firmware drives BL from GPIO9 with `GPIO_DRIVE_CAP_1` (reduced drive) until BL current is measured. Owner accepted the risk 2026-10-18. Drive-cap → mA mapping for S3** `[unverified — check datasheet IO drive table]`
 - **GMT020 in the SAUCEDECK case: Adafruit `setRotation(3)` = upright landscape (1 = upside down).** `[verified: operator, 2026-10-18]`
+- **LED board = 16 × WS2812 → ~960 mA full white (60 mA/LED approx) > USB budget; firmware frame cap 250 mA estimated. Idle {0,4,12} judged too bright, {0,1,3} used.** `[verified: owner count + bench feedback 2026-10-19; current = estimate]`

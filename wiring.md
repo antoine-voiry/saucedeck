@@ -75,6 +75,8 @@ Key leg 2 of all 12 keys chained to GND. EC11 `S2` jumpered to its own `C` (GND)
 
 ## 4. LED board (WS2812)
 
+16 × WS2812 (owner, 2026-10-19). Full white ≈ 960 mA → firmware caps frames at 250 mA estimated.
+
 | Pin | Connected To | Notes |
 | :--- | :--- | :--- |
 | **5V** | ESP32 `5V` | Resistor and cap already on the board |

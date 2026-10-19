@@ -2,8 +2,8 @@
 #include <Adafruit_NeoPixel.h>
 #include "pins.h"
 
-// LED board has more than 12 LEDs; exact count not recorded yet (wiring.md).
-// Too high is harmless (data falls off the end), too low leaves the tail dark.
+// 16 LEDs on the LED board (owner, 2026-10-19). Full white would be ~960 mA:
+// LedEffects caps every frame at 250 mA estimated.
 static constexpr uint16_t kLedCount = 16;
 static constexpr uint32_t kFrameMs = 20;
 
