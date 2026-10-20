@@ -47,15 +47,15 @@ from the K labels used while soldering. Firmware sends position 1–12 as F13–
 | **SCL** | ESP32 `GPIO 7` | |
 | **INTA, INTB** | nothing | firmware polls |
 | **GPB0–GPB3** | Key positions 1–4 | 0–3 |
-| **GPA3, GPA2, GPA1** | Key positions 5, 6, 7 | 4–6 |
+| **GPA2, GPA1, GPA0** | Key positions 5, 6, 7 | 4–6 |
 | **GPB6** | Key position 8 | 7 |
-| **GPA4, GPA5, GPA6, GPA0** | Key positions 9, 10, 11, 12 | 8–11 |
+| **GPA3, GPA6, GPA5, GPA4** | Key positions 9, 10, 11, 12 | 8–11 |
 | **GPA7** | unused (output-only) | |
 | **GPB4** | EC11 #1 `S1` (knob 1) | 12 |
 | **GPB5** | EC11 #2 `S1` (knob 2) | 13 |
 | **GPB7** | unused (output-only) | |
 
-Rows 5–7 and 9–11 swapped by the 2026-10-19 rewire (bench-verified). Position 12 = GPA0 assumed: only free input, key 12 still open on the bench.
+Positions 5–7 and 9–12 (the 7 bottom keys) follow the 2026-10-20 rewire, bench-verified: all 12 keys read on distinct pins (docs/bringup/2026-10-20.log).
 
 Key leg 2 of all 12 keys chained to GND. EC11 `S2` jumpered to its own `C` (GND).
 
