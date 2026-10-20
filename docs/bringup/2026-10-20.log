@@ -1,0 +1,16 @@
+== 2026-10-20: key check after operator rewired the 7 bottom keys ==
+Production firmware was loaded -> bench.py no reply. Flashed bringup env (SUCCESS).
+cmd i: PASS ACK 0x27, idle raw 0x7F7F (no stuck pin). ENC1/ENC2 idle A=1 B=1.
+cmd M x3 (30 s each), operator pressed 1..12 in order:
+  1-4: GPB0 GPB1 GPB2 GPB3 | 5-7: GPA3 GPA2 GPA1 | 8: GPB6 | 9: GPA4 | 10: GPA6 | 11: GPA5 | 12: none
+  (pass 1 missed key 1 = pressed before window; pass 2 extra GPA1 = operator double press)
+  1 ms DOWN/UP/DOWN chatter on GPB2, GPB3, GPB6 (absorbed by debounce).
+-> 10/11 swapped vs map (map: 10=GPA5, 11=GPA6). Key 12 open 3/3 passes, no input bit changes.
+   Note: GPA7 is output-only (IODIRA=0x7F, driven low) -> a key wired there is invisible.
+
+== After operator reworked key 12 ==
+cmd M (30 s), operator pressed 1..12 in order:
+  1-4: GPB0 GPB1 GPB2 GPB3 | 5-7: GPA2 GPA1 GPA0 | 8: GPB6 | 9-12: GPA3 GPA6 GPA5 GPA4
+  12 distinct input pins, no duplicates, none missing. 1 ms chatter on GPB0, GPA6 (debounce).
+-> map updated (mcp23017.cpp + test_mcp + wiring.md). native 115/115, saucedeck + bringup build OK.
+   Production firmware reflashed.
