@@ -46,48 +46,61 @@ void test_delta_no_change_is_empty() {
 
 void test_model_first_frame_all_dirty() {
   ScreenModel m;
-  TEST_ASSERT_EQUAL_HEX8(DIRTY_ALL, m.update({0, false, false}));
+  TEST_ASSERT_EQUAL_HEX8(DIRTY_ALL, m.update({0, false, false, false, 0, BANNER_NONE, 0}));
 }
 
 void test_model_same_state_clean() {
   ScreenModel m;
-  m.update({20, false, false});
-  TEST_ASSERT_EQUAL_HEX8(DIRTY_NONE, m.update({20, false, false}));
+  m.update({20, false, false, false, 0, BANNER_NONE, 0});
+  TEST_ASSERT_EQUAL_HEX8(DIRTY_NONE, m.update({20, false, false, false, 0, BANNER_NONE, 0}));
 }
 
 void test_model_volume_change_marks_bar_and_text() {
   ScreenModel m;
-  m.update({20, false, false});
-  TEST_ASSERT_EQUAL_HEX8(DIRTY_BAR | DIRTY_VOLUME_TEXT, m.update({26, false, false}));
+  m.update({20, false, false, false, 0, BANNER_NONE, 0});
+  TEST_ASSERT_EQUAL_HEX8(DIRTY_BAR | DIRTY_VOLUME_TEXT, m.update({26, false, false, false, 0, BANNER_NONE, 0}));
 }
 
 void test_model_speaker_mute_marks_color_and_icon() {
   // Muted bar keeps its level but is drawn grey: full bar repaint
   ScreenModel m;
-  m.update({20, false, false});
-  TEST_ASSERT_EQUAL_HEX8(DIRTY_BAR_COLOR | DIRTY_SPEAKER_ICON, m.update({20, true, false}));
+  m.update({20, false, false, false, 0, BANNER_NONE, 0});
+  TEST_ASSERT_EQUAL_HEX8(DIRTY_BAR_COLOR | DIRTY_SPEAKER_ICON, m.update({20, true, false, false, 0, BANNER_NONE, 0}));
 }
 
 void test_model_mic_change_marks_mic_only() {
   ScreenModel m;
-  m.update({20, false, false});
-  TEST_ASSERT_EQUAL_HEX8(DIRTY_MIC, m.update({20, false, true}));
+  m.update({20, false, false, false, 0, BANNER_NONE, 0});
+  TEST_ASSERT_EQUAL_HEX8(DIRTY_MIC, m.update({20, false, true, false, 0, BANNER_NONE, 0}));
 }
 
 void test_model_previous_fill_tracks_last_drawn() {
   ScreenModel m;
-  m.update({50, false, false});
+  m.update({50, false, false, false, 0, BANNER_NONE, 0});
   TEST_ASSERT_EQUAL_UINT8(50, m.current().volumePercent);
-  m.update({75, false, false});
+  m.update({75, false, false, false, 0, BANNER_NONE, 0});
   TEST_ASSERT_EQUAL_UINT8(75, m.current().volumePercent);
   TEST_ASSERT_EQUAL_UINT8(50, m.previous().volumePercent);
 }
 
 void test_model_invalidate_forces_full_redraw() {
   ScreenModel m;
-  m.update({20, false, false});
+  m.update({20, false, false, false, 0, BANNER_NONE, 0});
   m.invalidate();
-  TEST_ASSERT_EQUAL_HEX8(DIRTY_ALL, m.update({20, false, false}));
+  TEST_ASSERT_EQUAL_HEX8(DIRTY_ALL, m.update({20, false, false, false, 0, BANNER_NONE, 0}));
+}
+
+void test_model_mic_level_change_marks_mic() {
+  ScreenModel m;
+  m.update({20, false, false, true, 40, BANNER_NONE, 0});
+  TEST_ASSERT_EQUAL_HEX8(DIRTY_MIC, m.update({20, false, false, true, 45, BANNER_NONE, 0}));
+}
+
+void test_model_banner_change_marks_banner() {
+  ScreenModel m;
+  m.update({20, false, false, false, 0, BANNER_NONE, 0});
+  TEST_ASSERT_EQUAL_HEX8(DIRTY_BANNER, m.update({20, false, false, false, 0, BANNER_APPLY, 30}));
+  TEST_ASSERT_EQUAL_HEX8(DIRTY_BANNER, m.update({20, false, false, false, 0, BANNER_APPLY, 29}));
 }
 
 int main(int, char **) {
@@ -105,5 +118,7 @@ int main(int, char **) {
   RUN_TEST(test_model_mic_change_marks_mic_only);
   RUN_TEST(test_model_previous_fill_tracks_last_drawn);
   RUN_TEST(test_model_invalidate_forces_full_redraw);
+  RUN_TEST(test_model_mic_level_change_marks_mic);
+  RUN_TEST(test_model_banner_change_marks_banner);
   return UNITY_END();
 }

@@ -39,6 +39,8 @@ class LedEffects {
   static constexpr uint32_t kBudgetMa = 250;  // leaves room for ESP32 + LCD BL (estimate)
   static constexpr uint32_t kFlashMs = 250;
   static constexpr uint32_t kGaugeMs = 1500;
+  static constexpr uint32_t kWifiBudgetMa = 30;
+  void setWifi(bool on) { wifi_ = on; }
 
   void onAction(const Action &a, uint32_t nowMs) {
     switch (a.type) {
@@ -58,19 +60,27 @@ class LedEffects {
           case ConsumerCode::PrevTrack: flash({200, 200, 200}, nowMs); break;
         }
         break;
+      case ActionType::HelperAction: flash(kKeyColors[a.value % 12], nowMs); break;
+      case ActionType::HelperMissing: flash({255, 40, 0}, nowMs); break;
+      case ActionType::HelperMicMute: flash({255, 0, 0}, nowMs); break;
+      case ActionType::KeyMapCommitted: flash({0, 255, 0}, nowMs); break;
       case ActionType::KeyUp:
-      case ActionType::HelperAction:
-      case ActionType::HelperMissing:
-      case ActionType::HelperMicMute:
       case ActionType::MicUp:
       case ActionType::MicDown:
       case ActionType::WifiToggle:
-      case ActionType::KeyMapCommitted:
       case ActionType::KeyMapDiscarded: break;
     }
   }
 
   void render(const LedInputs &in, uint32_t nowMs, Rgb *px, size_t n) {
+    if (wifi_) {  // Wi-Fi TX peaks need the USB budget: one slow blue pulse, nothing else
+      uint32_t ph = nowMs % 1000;
+      uint8_t lvl = static_cast<uint8_t>((ph < 500 ? ph : 1000 - ph) * 40 / 500);
+      for (size_t i = 0; i < n; i++) px[i] = {0, 0, 0};
+      if (n) px[0] = {0, 0, lvl};
+      limitPower(px, n, kWifiBudgetMa);
+      return;
+    }
     if (gauge_ && nowMs - gaugeStart_ >= kGaugeMs) gauge_ = false;
     if (flash_ && nowMs - flashStart_ >= kFlashMs) flash_ = false;
 
@@ -105,7 +115,7 @@ class LedEffects {
     flashStart_ = nowMs;
   }
 
-  bool flash_ = false, gauge_ = false;
+  bool flash_ = false, gauge_ = false, wifi_ = false;
   Rgb flashColor_{0, 0, 0};
   uint32_t flashStart_ = 0, gaugeStart_ = 0;
 };

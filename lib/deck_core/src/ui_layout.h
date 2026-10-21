@@ -5,10 +5,20 @@
 // and only the strip of the bar that changed: a full clear like upstream SauceDeck
 // flickers and stalls the polled encoders while SPI is busy.
 
+enum : uint8_t {
+  BANNER_NONE, BANNER_WIFI_COUNTDOWN, BANNER_WIFI_STARTING, BANNER_WIFI_PORTAL, BANNER_WIFI_JOINED,
+  BANNER_APPLY, BANNER_HELPER_MISSING, BANNER_KEYMAP_RESET, BANNER_WIFI_FAILED, BANNER_INVALID_KEY,
+  BANNER_BROWNOUT,
+};
+
 struct ScreenState {
   uint8_t volumePercent;
   bool speakerMuted;
   bool micMuted;
+  bool micLevelKnown;  // helper connected: show real mic %
+  uint8_t micPercent;
+  uint8_t banner;      // BANNER_*
+  uint8_t bannerArg;   // countdown seconds, key number, ...
 };
 
 enum : uint8_t {
@@ -18,7 +28,8 @@ enum : uint8_t {
   DIRTY_VOLUME_TEXT = 1u << 2,
   DIRTY_SPEAKER_ICON = 1u << 3,
   DIRTY_MIC = 1u << 4,
-  DIRTY_ALL = 0x1F,
+  DIRTY_BANNER = 1u << 5,      // status line (Wi-Fi, Apply?, helper missing, ...)
+  DIRTY_ALL = 0x3F,
 };
 
 struct Strip {
@@ -53,6 +64,8 @@ class ScreenModel {
       if (next.volumePercent != cur_.volumePercent) dirty |= DIRTY_BAR | DIRTY_VOLUME_TEXT;
       if (next.speakerMuted != cur_.speakerMuted) dirty |= DIRTY_BAR_COLOR | DIRTY_SPEAKER_ICON;
       if (next.micMuted != cur_.micMuted) dirty |= DIRTY_MIC;
+      if (next.micLevelKnown != cur_.micLevelKnown || next.micPercent != cur_.micPercent) dirty |= DIRTY_MIC;
+      if (next.banner != cur_.banner || next.bannerArg != cur_.bannerArg) dirty |= DIRTY_BANNER;
     }
     prev_ = cur_;
     cur_ = next;
