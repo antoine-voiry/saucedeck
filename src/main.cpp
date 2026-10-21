@@ -10,15 +10,12 @@
 #include "mcp_io.h"
 #include "encoders.h"
 #include "idle_dimmer.h"
+#include "keymap_store.h"
+#include <esp_system.h>
 
 USBHIDKeyboard Keyboard;
 USBHIDConsumerControl Consumer;
 
-// Deck buttons 1-12 -> F13-F24 (unused by OSes, easy to bind in any app)
-static const uint8_t kButtonKeys[12] = {
-    KEY_F13, KEY_F14, KEY_F15, KEY_F16, KEY_F17, KEY_F18,
-    KEY_F19, KEY_F20, KEY_F21, KEY_F22, KEY_F23, KEY_F24,
-};
 
 // Knob 2 push: mic mute toggle. Cmd+Shift+M = Teams on macOS (unverified); change here.
 static const uint8_t kMicMuteChord[] = {KEY_LEFT_GUI, KEY_LEFT_SHIFT, 'm'};
@@ -36,6 +33,8 @@ static_assert(sizeof(kConsumerCodes) / sizeof(kConsumerCodes[0]) ==
 
 static Deck deck(16);  // macOS: 16 VOL+/- steps full range (unverified)
 static bool mcpOk = false;
+static bool keymapResetNotice = false;  // blob present but corrupt -> defaults (banner)
+static bool brownoutNotice = false;     // last reset was a brownout (banner)
 static IdleDimmer dimmer;  // LEDs + LCD fade after 120 s idle, off at 240 s
 
 static void run(const ActionList &actions) {
@@ -43,8 +42,20 @@ static void run(const ActionList &actions) {
     const Action &a = actions.items[i];
     ledsOnAction(a, millis());
     switch (a.type) {
-      case ActionType::KeyDown: Keyboard.press(kButtonKeys[a.value]); break;
-      case ActionType::KeyUp: Keyboard.release(kButtonKeys[a.value]); break;
+      case ActionType::KeyDown: {  // keystroke entry: modifiers (HID 0xE0+bit) + one key
+        const Keystroke &k = deck.keyMap().entry(a.value).ks;
+        for (uint8_t b = 0; b < 4; b++)
+          if (k.mods & (1u << b)) Keyboard.pressRaw(0xE0 + b);
+        Keyboard.pressRaw(k.usage);
+        break;
+      }
+      case ActionType::KeyUp: {
+        const Keystroke &k = deck.keyMap().entry(a.value).ks;
+        Keyboard.releaseRaw(k.usage);
+        for (uint8_t b = 0; b < 4; b++)
+          if (k.mods & (1u << b)) Keyboard.releaseRaw(0xE0 + b);
+        break;
+      }
       case ActionType::ReleaseAll:
         Keyboard.releaseAll();
         Consumer.release();
@@ -60,8 +71,8 @@ static void run(const ActionList &actions) {
       case ActionType::MicUp:
       case ActionType::MicDown:
       case ActionType::WifiToggle:
-      case ActionType::KeyMapCommitted:
       case ActionType::KeyMapDiscarded: break;  // wired in later tasks
+      case ActionType::KeyMapCommitted: keymapSave(deck.keyMap()); break;
       case ActionType::MicMute:
         // Release only the chord keys: deck F-keys may still be held
         for (uint8_t k : kMicMuteChord) Keyboard.press(k);
@@ -88,6 +99,13 @@ void setup() {
   Consumer.begin();
   USB.begin();
   Serial.begin(115200);
+
+  KeyMap stored;
+  bool hadMap = keymapExists();
+  bool loaded = keymapLoad(stored);
+  if (loaded) deck.setKeyMap(stored);
+  keymapResetNotice = hadMap && !loaded;
+  brownoutNotice = esp_reset_reason() == ESP_RST_BROWNOUT;
 
   displayBegin();
   ledsBegin();
