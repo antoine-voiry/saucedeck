@@ -34,6 +34,7 @@ class Deck {
 
   void onKeys(uint16_t pressedRaw, uint32_t nowMs, ActionList &out) {
     busLost_ = false;
+    failing_ = false;
     uint16_t now = debounce_.update(pressedRaw, nowMs);
     uint16_t changed = (now ^ held_) & DECK_KEYS;
     for (uint8_t i = 0; i < 12; i++) {
@@ -59,11 +60,30 @@ class Deck {
   }
 
   void onEncoders(int knob1, int knob2, ActionList &out) {
+    // Track only the steps that fit in the list, so the display matches what the host got
+    int room = static_cast<int>(ActionList::kMax - out.count);
+    if (knob1 > room) knob1 = room;
+    if (knob1 < -room) knob1 = -room;
     speaker_.rotate(knob1);
     pushSteps(knob1, ConsumerCode::VolumeUp, ConsumerCode::VolumeDown, out);
     pushSteps(knob2, ConsumerCode::NextTrack, ConsumerCode::PrevTrack, out);
   }
 
+  // An expander read failed. One glitch (bad header contact) must not release held keys,
+  // or the host sees a double press; only kBusLostMs of continuous failure counts as lost.
+  static constexpr uint32_t kBusLostMs = 20;
+  void onReadFailed(uint32_t nowMs, ActionList &out) {
+    if (!failing_) {
+      failing_ = true;
+      failSince_ = nowMs;
+    }
+    if (nowMs - failSince_ >= kBusLostMs) onBusLost(out);
+  }
+
+  const VolumeState &speaker() const { return speaker_; }
+  bool micMuted() const { return micMuted_; }
+
+ private:
   // Expander stopped answering: drop everything held so the host never sees a stuck key.
   // Knob state is reset without firing; held keys press again once the bus is back.
   void onBusLost(ActionList &out) {
@@ -75,10 +95,6 @@ class Deck {
     held_ = 0;
   }
 
-  const VolumeState &speaker() const { return speaker_; }
-  bool micMuted() const { return micMuted_; }
-
- private:
   static void pushSteps(int n, ConsumerCode up, ConsumerCode down, ActionList &out) {
     for (; n > 0; n--) out.push(ActionType::Consumer, static_cast<uint8_t>(up));
     for (; n < 0; n++) out.push(ActionType::Consumer, static_cast<uint8_t>(down));
@@ -90,4 +106,6 @@ class Deck {
   uint16_t held_ = 0;
   bool micMuted_ = false;
   bool busLost_ = false;
+  bool failing_ = false;
+  uint32_t failSince_ = 0;
 };

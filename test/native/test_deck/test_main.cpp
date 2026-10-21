@@ -15,6 +15,14 @@ static ActionList hold(Deck &d, uint16_t mask, uint32_t &t) {
   return a;
 }
 
+// Expander reads failing continuously for Deck::kBusLostMs -> bus declared lost.
+static void loseBus(Deck &d, ActionList &a, uint32_t &t) {
+  d.onReadFailed(t, a);
+  t += Deck::kBusLostMs;
+  d.onReadFailed(t, a);
+  t += 1;
+}
+
 static bool has(const ActionList &a, ActionType type, uint8_t value = 0) {
   for (size_t i = 0; i < a.count; i++)
     if (a.items[i].type == type && a.items[i].value == value) return true;
@@ -124,7 +132,7 @@ void test_deck_bus_lost_releases_held_keys() {
   uint32_t t = 0;
   hold(d, 1u << 5, t);
   ActionList a;
-  d.onBusLost(a);
+  loseBus(d, a, t);
   TEST_ASSERT_EQUAL(1, a.count);
   TEST_ASSERT_TRUE(has(a, ActionType::ReleaseAll));
 }
@@ -134,7 +142,7 @@ void test_deck_bus_back_with_key_held_presses_again() {
   uint32_t t = 0;
   hold(d, 1u << 5, t);
   ActionList a;
-  d.onBusLost(a);
+  loseBus(d, a, t);
   a = hold(d, 1u << 5, t);
   TEST_ASSERT_TRUE(has(a, ActionType::KeyDown, 5));
 }
@@ -144,7 +152,7 @@ void test_deck_bus_lost_during_knob_hold_fires_no_knob_action() {
   uint32_t t = 0;
   hold(d, DECK_ENC1_SW, t);
   ActionList a;
-  d.onBusLost(a);
+  loseBus(d, a, t);
   a = hold(d, 0, t);
   TEST_ASSERT_EQUAL(0, a.count);
   TEST_ASSERT_FALSE(d.speaker().muted());
@@ -153,8 +161,9 @@ void test_deck_bus_lost_during_knob_hold_fires_no_knob_action() {
 void test_deck_bus_lost_idle_sends_release_all_once() {
   Deck d;
   ActionList a;
-  d.onBusLost(a);
-  d.onBusLost(a);
+  uint32_t t = 0;
+  loseBus(d, a, t);
+  loseBus(d, a, t);
   TEST_ASSERT_EQUAL(1, a.count);
 }
 
@@ -162,6 +171,54 @@ void test_deck_action_list_caps_without_overflow() {
   ActionList a;
   for (int i = 0; i < 40; i++) a.push(ActionType::KeyUp, 0);
   TEST_ASSERT_EQUAL(ActionList::kMax, a.count);
+}
+
+void test_deck_single_failed_read_keeps_keys_held() {
+  // Bug: one I2C glitch released a held F-key and re-pressed it 25 ms later (double press)
+  Deck d;
+  uint32_t t = 0;
+  hold(d, 1u << 9, t);
+  ActionList a;
+  d.onReadFailed(t, a);
+  a = hold(d, 1u << 9, t);
+  TEST_ASSERT_EQUAL(0, a.count);
+}
+
+void test_deck_failures_shorter_than_limit_emit_nothing() {
+  Deck d;
+  uint32_t t = 0;
+  hold(d, 1u << 2, t);
+  ActionList a;
+  d.onReadFailed(t, a);
+  d.onReadFailed(t + Deck::kBusLostMs - 1, a);
+  TEST_ASSERT_EQUAL(0, a.count);
+  d.onReadFailed(t + Deck::kBusLostMs, a);
+  TEST_ASSERT_TRUE(has(a, ActionType::ReleaseAll));
+}
+
+void test_deck_good_read_restarts_failure_timer() {
+  Deck d;
+  uint32_t t = 0;
+  hold(d, 1u << 2, t);
+  ActionList a;
+  d.onReadFailed(t, a);
+  d.onKeys(1u << 2, t + 10, a);
+  d.onReadFailed(t + 15, a);
+  d.onReadFailed(t + 15 + Deck::kBusLostMs - 1, a);  // 34 ms after the first failure
+  TEST_ASSERT_EQUAL(0, a.count);
+}
+
+void test_deck_volume_steps_match_reports_sent() {
+  // Bug: rotate() counted every detent but ActionList drops past kMax -> display drift
+  Deck d;
+  ActionList a;
+  d.onEncoders(40, 0, a);
+  TEST_ASSERT_EQUAL(ActionList::kMax, a.count);
+  TEST_ASSERT_EQUAL_UINT8(16, d.speaker().steps());  // clamped by maxSteps anyway
+  Deck e(64);
+  ActionList b;
+  e.onEncoders(40, 0, b);
+  TEST_ASSERT_EQUAL_UINT8(b.count, e.speaker().steps());
 }
 
 int main(int, char **) {
@@ -180,5 +237,9 @@ int main(int, char **) {
   RUN_TEST(test_deck_bus_lost_during_knob_hold_fires_no_knob_action);
   RUN_TEST(test_deck_bus_lost_idle_sends_release_all_once);
   RUN_TEST(test_deck_action_list_caps_without_overflow);
+  RUN_TEST(test_deck_single_failed_read_keeps_keys_held);
+  RUN_TEST(test_deck_failures_shorter_than_limit_emit_nothing);
+  RUN_TEST(test_deck_good_read_restarts_failure_timer);
+  RUN_TEST(test_deck_volume_steps_match_reports_sent);
   return UNITY_END();
 }

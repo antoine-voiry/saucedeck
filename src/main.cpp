@@ -66,7 +66,7 @@ static void scanButtons(ActionList &out) {
   if (!mcpOk) mcpOk = mcpBegin();  // retry until the expander answers
   if (!mcpOk || !mcpReadRaw(raw)) {
     mcpOk = false;
-    deck.onBusLost(out);
+    deck.onReadFailed(millis(), out);
     return;
   }
   deck.onKeys(deckPressed(raw), millis(), out);
