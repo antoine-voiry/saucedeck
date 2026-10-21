@@ -122,6 +122,15 @@ host message (helper sends `HELLO` every second as keep-alive).
 - Wi-Fi on: frame cap 30 mA, action flashes and gauge off, LED 0 pulses blue (~1 Hz).
 - Wi-Fi off: unchanged (250 mA cap).
 
+### 4.10 IdleDimmer (owner request 2026-10-21)
+- Any key press, knob switch or knob detent = activity.
+- 0–120 s idle: full brightness. 120–240 s: LEDs and LCD backlight fade linearly to 0. 240 s: both off,
+  LCD panel in sleep (`SLPIN`).
+- Any input wakes instantly **and still performs its action** (the deck is a keyboard; swallowing a
+  press would surprise).
+- Never dims while a key-map change is pending, the Wi-Fi countdown runs, or Wi-Fi is on.
+- LCD backlight becomes PWM on GPIO9 (LEDC), perceptual (squared) curve.
+
 ## 5. src/ glue
 - `wifi_portal.cpp`: WiFiManager setup, custom parameters (12 × type + value), save callback →
   `PendingChange`. Only file allowed to include Wi-Fi headers.
