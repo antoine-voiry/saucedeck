@@ -101,7 +101,7 @@ void loop() {
   // Knob 1 -> volume, knob 2 -> next/previous track
   int d1, d2;
   encodersRead(d1, d2);
-  if (d1 || d2) deck.onEncoders(d1, d2, actions);
+  if (d1 || d2) deck.onEncoders(d1, d2, millis(), actions);
   run(actions);
 
   const VolumeState &spk = deck.speaker();

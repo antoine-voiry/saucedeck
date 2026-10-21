@@ -51,6 +51,11 @@ class Deck {
         out.push(helper_ ? ActionType::HelperAction : ActionType::HelperMissing, i);
       }
     }
+    if ((now & DECK_ENC2_SW) && !(held_ & DECK_ENC2_SW)) {  // knob 2 pressed: gesture starts
+      k2Since_ = nowMs;
+      k2Turned_ = false;
+      k2MissingSent_ = false;
+    }
     held_ = now;
 
     uint8_t chord = chord_.update(now, nowMs);
@@ -58,9 +63,13 @@ class Deck {
       out.push(ActionType::Consumer, static_cast<uint8_t>(ConsumerCode::Mute));
       speaker_.toggleMute();
     }
-    if (chord & CHORD_KNOB2) {
-      out.push(ActionType::MicMute);
-      micMuted_ = !micMuted_;
+    if ((chord & CHORD_KNOB2) && !k2Turned_) {  // push+turn adjusted the mic: no mute on release
+      if (helper_) {
+        out.push(ActionType::HelperMicMute);  // real system mic mute via the helper
+      } else {
+        out.push(ActionType::MicMute);  // fallback: app shortcut, local indicator
+        micMuted_ = !micMuted_;
+      }
     }
     if (chord & CHORD_SYNC) {  // user set host volume to 0 % and mic unmuted first
       speaker_.sync();
@@ -70,14 +79,30 @@ class Deck {
     if (chord & CHORD_WIFI) out.push(ActionType::WifiToggle);
   }
 
-  void onEncoders(int knob1, int knob2, ActionList &out) {
+  static constexpr uint32_t kMicTurnAfterMs = 150;
+
+  void onEncoders(int knob1, int knob2, uint32_t nowMs, ActionList &out) {
     // Track only the steps that fit in the list, so the display matches what the host got
     int room = static_cast<int>(ActionList::kMax - out.count);
     if (knob1 > room) knob1 = room;
     if (knob1 < -room) knob1 = -room;
     speaker_.rotate(knob1);
     pushSteps(knob1, ConsumerCode::VolumeUp, ConsumerCode::VolumeDown, out);
-    pushSteps(knob2, ConsumerCode::NextTrack, ConsumerCode::PrevTrack, out);
+
+    if (!(held_ & DECK_ENC2_SW)) {  // knob 2 turned alone: track skip
+      pushSteps(knob2, ConsumerCode::NextTrack, ConsumerCode::PrevTrack, out);
+      return;
+    }
+    // Knob 2 held + turned = mic level. Ignore counts right after the press (shaft nudge).
+    if (knob2 == 0 || nowMs - k2Since_ < kMicTurnAfterMs) return;
+    k2Turned_ = true;
+    if (!helper_) {
+      if (!k2MissingSent_) out.push(ActionType::HelperMissing, 0xFF);
+      k2MissingSent_ = true;
+      return;
+    }
+    for (; knob2 > 0; knob2--) out.push(ActionType::MicUp);
+    for (; knob2 < 0; knob2++) out.push(ActionType::MicDown);
   }
 
   // An expander read failed. One glitch (bad header contact) must not release held keys,
@@ -109,6 +134,7 @@ class Deck {
     debounce_ = MaskDebouncer();
     chord_ = KnobChord(DECK_ENC1_SW, DECK_ENC2_SW);
     held_ = 0;
+    k2Turned_ = false;
   }
 
   static void pushSteps(int n, ConsumerCode up, ConsumerCode down, ActionList &out) {
@@ -125,5 +151,7 @@ class Deck {
   bool failing_ = false;
   KeyMap keymap_;
   bool helper_ = false;
+  uint32_t k2Since_ = 0;
+  bool k2Turned_ = false, k2MissingSent_ = false;
   uint32_t failSince_ = 0;
 };
