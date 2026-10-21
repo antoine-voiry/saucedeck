@@ -58,7 +58,15 @@ class LedEffects {
           case ConsumerCode::PrevTrack: flash({200, 200, 200}, nowMs); break;
         }
         break;
-      case ActionType::KeyUp: break;
+      case ActionType::KeyUp:
+      case ActionType::HelperAction:
+      case ActionType::HelperMissing:
+      case ActionType::HelperMicMute:
+      case ActionType::MicUp:
+      case ActionType::MicDown:
+      case ActionType::WifiToggle:
+      case ActionType::KeyMapCommitted:
+      case ActionType::KeyMapDiscarded: break;
     }
   }
 

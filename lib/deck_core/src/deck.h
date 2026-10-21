@@ -2,13 +2,17 @@
 #include <stddef.h>
 #include <stdint.h>
 #include "debounce.h"
+#include "keymap.h"
 #include "knob_chord.h"
 #include "mcp23017.h"
 #include "volume_state.h"
 
 // HID-agnostic actions. src/ maps them to real reports (F13+index, consumer codes, chords).
 // Sync is local only (state re-aligned, no HID report); src/ uses it for feedback.
-enum class ActionType : uint8_t { KeyDown, KeyUp, ReleaseAll, Consumer, MicMute, Sync };
+enum class ActionType : uint8_t {
+  KeyDown, KeyUp, ReleaseAll, Consumer, MicMute, Sync,
+  HelperAction, HelperMissing, HelperMicMute, MicUp, MicDown, WifiToggle, KeyMapCommitted, KeyMapDiscarded,
+};
 enum class ConsumerCode : uint8_t { Mute, VolumeUp, VolumeDown, NextTrack, PrevTrack };
 
 struct Action {
@@ -39,7 +43,13 @@ class Deck {
     uint16_t changed = (now ^ held_) & DECK_KEYS;
     for (uint8_t i = 0; i < 12; i++) {
       uint16_t bit = 1u << i;
-      if (changed & bit) out.push((now & bit) ? ActionType::KeyDown : ActionType::KeyUp, i);
+      if (!(changed & bit)) continue;
+      bool down = now & bit;
+      if (keymap_.entry(i).type == KeyType::Keystroke) {
+        out.push(down ? ActionType::KeyDown : ActionType::KeyUp, i);
+      } else if (down) {  // app / URL / Shortcut: one-shot, run by the Mac helper
+        out.push(helper_ ? ActionType::HelperAction : ActionType::HelperMissing, i);
+      }
     }
     held_ = now;
 
@@ -57,6 +67,7 @@ class Deck {
       micMuted_ = false;
       out.push(ActionType::Sync);
     }
+    if (chord & CHORD_WIFI) out.push(ActionType::WifiToggle);
   }
 
   void onEncoders(int knob1, int knob2, ActionList &out) {
@@ -79,6 +90,11 @@ class Deck {
     }
     if (nowMs - failSince_ >= kBusLostMs) onBusLost(out);
   }
+
+  void setKeyMap(const KeyMap &m) { keymap_ = m; }
+  const KeyMap &keyMap() const { return keymap_; }
+  void setHelperPresent(bool p) { helper_ = p; }
+  uint32_t chordHeldMs(uint32_t nowMs) const { return chord_.bothHeldMs(nowMs); }
 
   const VolumeState &speaker() const { return speaker_; }
   bool micMuted() const { return micMuted_; }
@@ -107,5 +123,7 @@ class Deck {
   bool micMuted_ = false;
   bool busLost_ = false;
   bool failing_ = false;
+  KeyMap keymap_;
+  bool helper_ = false;
   uint32_t failSince_ = 0;
 };

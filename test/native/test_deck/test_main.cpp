@@ -223,6 +223,59 @@ void test_deck_volume_steps_match_reports_sent() {
   TEST_ASSERT_EQUAL_UINT8(b.count, e.speaker().steps());
 }
 
+// --- keymap routing / helper / wifi ---
+
+static Deck deckWithApp(uint8_t key) {
+  Deck d;
+  KeyMap m;
+  m.set(key, KeyType::App, "Calculator");
+  d.setKeyMap(m);
+  return d;
+}
+
+void test_deck_keystroke_entry_keeps_down_up() {
+  Deck d;
+  uint32_t t = 0;
+  ActionList a = hold(d, 1u << 0, t);
+  TEST_ASSERT_TRUE(has(a, ActionType::KeyDown, 0));
+  a = hold(d, 0, t);
+  TEST_ASSERT_TRUE(has(a, ActionType::KeyUp, 0));
+}
+
+void test_deck_app_key_with_helper_sends_helper_action_on_press_only() {
+  Deck d = deckWithApp(3);
+  d.setHelperPresent(true);
+  uint32_t t = 0;
+  ActionList a = hold(d, 1u << 3, t);
+  TEST_ASSERT_EQUAL(1, a.count);
+  TEST_ASSERT_TRUE(has(a, ActionType::HelperAction, 3));
+  a = hold(d, 0, t);
+  TEST_ASSERT_EQUAL(0, a.count);
+}
+
+void test_deck_app_key_without_helper_reports_missing() {
+  Deck d = deckWithApp(3);
+  uint32_t t = 0;
+  ActionList a = hold(d, 1u << 3, t);
+  TEST_ASSERT_EQUAL(1, a.count);
+  TEST_ASSERT_TRUE(has(a, ActionType::HelperMissing, 3));
+}
+
+void test_deck_wifi_chord_emits_toggle_once() {
+  Deck d;
+  uint32_t t = 0;
+  ActionList a;
+  d.onKeys(DECK_ENC1_SW | DECK_ENC2_SW, t, a);
+  t += 30;
+  d.onKeys(DECK_ENC1_SW | DECK_ENC2_SW, t, a);  // debounced: chord starts at t=30
+  t += KnobChord::kWifiHoldMs;
+  d.onKeys(DECK_ENC1_SW | DECK_ENC2_SW, t, a);
+  TEST_ASSERT_TRUE(has(a, ActionType::WifiToggle));
+  TEST_ASSERT_TRUE(d.chordHeldMs(t) >= KnobChord::kWifiHoldMs);
+  ActionList b = hold(d, 0, t);
+  TEST_ASSERT_FALSE(has(b, ActionType::Sync));
+}
+
 int main(int, char **) {
   UNITY_BEGIN();
   RUN_TEST(test_deck_key_press_and_release);
@@ -243,5 +296,9 @@ int main(int, char **) {
   RUN_TEST(test_deck_failures_shorter_than_limit_emit_nothing);
   RUN_TEST(test_deck_good_read_restarts_failure_timer);
   RUN_TEST(test_deck_volume_steps_match_reports_sent);
+  RUN_TEST(test_deck_keystroke_entry_keeps_down_up);
+  RUN_TEST(test_deck_app_key_with_helper_sends_helper_action_on_press_only);
+  RUN_TEST(test_deck_app_key_without_helper_reports_missing);
+  RUN_TEST(test_deck_wifi_chord_emits_toggle_once);
   return UNITY_END();
 }

@@ -52,6 +52,14 @@ static void run(const ActionList &actions) {
         Consumer.release();
         break;
       case ActionType::Sync: break;  // local only, no HID report
+      case ActionType::HelperAction:
+      case ActionType::HelperMissing:
+      case ActionType::HelperMicMute:
+      case ActionType::MicUp:
+      case ActionType::MicDown:
+      case ActionType::WifiToggle:
+      case ActionType::KeyMapCommitted:
+      case ActionType::KeyMapDiscarded: break;  // wired in later tasks
       case ActionType::MicMute:
         // Release only the chord keys: deck F-keys may still be held
         for (uint8_t k : kMicMuteChord) Keyboard.press(k);
