@@ -107,9 +107,10 @@ static void drawSplash() {
 void displayBegin() {
   // BL on GPIO9, current not measured yet (owner accepted the risk 2026-10-18).
   // Reduced drive strength limits what the pin can source until it is measured.
-  pinMode(TFT_BL_PIN, OUTPUT);
+  // PWM so the backlight can fade out when idle (IdleDimmer). 5 kHz, 8 bit, core 3.x API.
+  ledcAttach(TFT_BL_PIN, 5000, 8);
   gpio_set_drive_capability(static_cast<gpio_num_t>(TFT_BL_PIN), GPIO_DRIVE_CAP_1);
-  digitalWrite(TFT_BL_PIN, HIGH);
+  ledcWrite(TFT_BL_PIN, 255);
 
   SPI.begin(TFT_SCL_PIN, -1, TFT_SDA_PIN, -1);  // MISO -1: GPIO13 is LCD DC
   tft.init(240, 320);
@@ -138,4 +139,17 @@ void displayUpdate(const ScreenState &state, uint32_t nowMs) {
   if (dirty & DIRTY_VOLUME_TEXT) drawPercent(cur.volumePercent);
   if (dirty & DIRTY_SPEAKER_ICON) drawSpeaker(cur.speakerMuted);
   if (dirty & DIRTY_MIC) drawMic(cur.micMuted);
+}
+
+static bool panelAsleep = false;
+
+void displaySetDim(uint8_t level) {
+  ledcWrite(TFT_BL_PIN, static_cast<uint32_t>(level) * level / 255);  // squared: perceptual fade
+  if (level == 0 && !panelAsleep) {
+    tft.enableSleep(true);  // SLPIN: panel keeps its frame, draws almost nothing
+    panelAsleep = true;
+  } else if (level > 0 && panelAsleep) {
+    tft.enableSleep(false);
+    panelAsleep = false;
+  }
 }

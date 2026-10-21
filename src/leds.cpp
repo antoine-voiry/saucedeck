@@ -28,3 +28,5 @@ void ledsUpdate(const LedInputs &in, uint32_t nowMs) {
   for (uint16_t i = 0; i < kLedCount; i++) strip.setPixelColor(i, frame[i].r, frame[i].g, frame[i].b);
   strip.show();
 }
+
+void ledsSetDim(uint8_t level) { effects.setDim(level); }

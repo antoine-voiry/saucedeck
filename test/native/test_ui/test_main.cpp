@@ -1,5 +1,6 @@
 #include <unity.h>
 #include "ui_layout.h"
+#include "idle_dimmer.h"
 
 void setUp() {}
 void tearDown() {}
@@ -103,6 +104,38 @@ void test_model_banner_change_marks_banner() {
   TEST_ASSERT_EQUAL_HEX8(DIRTY_BANNER, m.update({20, false, false, false, 0, BANNER_APPLY, 29}));
 }
 
+// --- IdleDimmer: full 120 s, linear fade, off at 240 s ---
+
+void test_dimmer_full_until_fade_start() {
+  IdleDimmer d;
+  d.onActivity(1000);
+  TEST_ASSERT_EQUAL_UINT8(255, d.level(1000));
+  TEST_ASSERT_EQUAL_UINT8(255, d.level(1000 + IdleDimmer::kFadeStartMs - 1));
+}
+
+void test_dimmer_linear_fade_and_off() {
+  IdleDimmer d;
+  d.onActivity(0);
+  TEST_ASSERT_EQUAL_UINT8(255, d.level(IdleDimmer::kFadeStartMs));
+  TEST_ASSERT_EQUAL_UINT8(127, d.level(180000));  // halfway
+  TEST_ASSERT_EQUAL_UINT8(0, d.level(IdleDimmer::kOffMs));
+  TEST_ASSERT_EQUAL_UINT8(0, d.level(IdleDimmer::kOffMs + 999999));
+}
+
+void test_dimmer_activity_wakes_instantly() {
+  IdleDimmer d;
+  d.onActivity(0);
+  TEST_ASSERT_EQUAL_UINT8(0, d.level(300000));
+  d.onActivity(300000);
+  TEST_ASSERT_EQUAL_UINT8(255, d.level(300000));
+}
+
+void test_dimmer_millis_wrap() {
+  IdleDimmer d;
+  d.onActivity(0xFFFFFF00u);
+  TEST_ASSERT_EQUAL_UINT8(255, d.level(0x00001000u));
+}
+
 int main(int, char **) {
   UNITY_BEGIN();
   RUN_TEST(test_fill_zero_and_full);
@@ -120,5 +153,9 @@ int main(int, char **) {
   RUN_TEST(test_model_invalidate_forces_full_redraw);
   RUN_TEST(test_model_mic_level_change_marks_mic);
   RUN_TEST(test_model_banner_change_marks_banner);
+  RUN_TEST(test_dimmer_full_until_fade_start);
+  RUN_TEST(test_dimmer_linear_fade_and_off);
+  RUN_TEST(test_dimmer_activity_wakes_instantly);
+  RUN_TEST(test_dimmer_millis_wrap);
   return UNITY_END();
 }
