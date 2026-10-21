@@ -41,6 +41,7 @@ class LedEffects {
   static constexpr uint32_t kGaugeMs = 1500;
   static constexpr uint32_t kWifiBudgetMa = 30;
   void setWifi(bool on) { wifi_ = on; }
+  void setDim(uint8_t level) { dim_ = level; }  // idle fade (IdleDimmer), after the power cap
 
   void onAction(const Action &a, uint32_t nowMs) {
     switch (a.type) {
@@ -79,6 +80,7 @@ class LedEffects {
       for (size_t i = 0; i < n; i++) px[i] = {0, 0, 0};
       if (n) px[0] = {0, 0, lvl};
       limitPower(px, n, kWifiBudgetMa);
+      applyDim(px, n);
       return;
     }
     if (gauge_ && nowMs - gaugeStart_ >= kGaugeMs) gauge_ = false;
@@ -98,6 +100,7 @@ class LedEffects {
       px[i] = {max(p.r, f.r), max(p.g, f.g), max(p.b, f.b)};
     }
     limitPower(px, n, kBudgetMa);
+    applyDim(px, n);
   }
 
  private:
@@ -115,7 +118,15 @@ class LedEffects {
     flashStart_ = nowMs;
   }
 
+  void applyDim(Rgb *px, size_t n) const {
+    if (dim_ == 255) return;
+    for (size_t i = 0; i < n; i++)
+      px[i] = {static_cast<uint8_t>(px[i].r * dim_ / 255), static_cast<uint8_t>(px[i].g * dim_ / 255),
+               static_cast<uint8_t>(px[i].b * dim_ / 255)};
+  }
+
   bool flash_ = false, gauge_ = false, wifi_ = false;
+  uint8_t dim_ = 255;
   Rgb flashColor_{0, 0, 0};
   uint32_t flashStart_ = 0, gaugeStart_ = 0;
 };

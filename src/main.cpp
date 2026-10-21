@@ -9,6 +9,7 @@
 #include "leds.h"
 #include "mcp_io.h"
 #include "encoders.h"
+#include "idle_dimmer.h"
 
 USBHIDKeyboard Keyboard;
 USBHIDConsumerControl Consumer;
@@ -35,6 +36,7 @@ static_assert(sizeof(kConsumerCodes) / sizeof(kConsumerCodes[0]) ==
 
 static Deck deck(16);  // macOS: 16 VOL+/- steps full range (unverified)
 static bool mcpOk = false;
+static IdleDimmer dimmer;  // LEDs + LCD fade after 120 s idle, off at 240 s
 
 static void run(const ActionList &actions) {
   for (size_t i = 0; i < actions.count; i++) {
@@ -103,6 +105,13 @@ void loop() {
   encodersRead(d1, d2);
   if (d1 || d2) deck.onEncoders(d1, d2, millis(), actions);
   run(actions);
+
+  // Any input (still acted on above) or an on-screen prompt keeps the deck awake
+  uint32_t now = millis();
+  if (actions.count || d1 || d2 || deck.pending() || deck.chordHeldMs(now) > 0) dimmer.onActivity(now);
+  uint8_t dim = dimmer.level(now);
+  ledsSetDim(dim);
+  displaySetDim(dim);
 
   const VolumeState &spk = deck.speaker();
   displayUpdate({spk.percent(), spk.muted(), deck.micMuted(), false, 0, BANNER_NONE, 0}, millis());

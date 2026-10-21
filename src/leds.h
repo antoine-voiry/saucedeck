@@ -6,3 +6,4 @@
 void ledsBegin();
 void ledsOnAction(const Action &a, uint32_t nowMs);
 void ledsUpdate(const LedInputs &in, uint32_t nowMs);
+void ledsSetDim(uint8_t level);

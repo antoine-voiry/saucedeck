@@ -190,6 +190,19 @@ void test_helper_missing_flashes_orange() {
   TEST_ASSERT_TRUE(px[0].r > 150 && px[0].g < 80);
 }
 
+void test_dim_scales_frame_and_zero_is_off() {
+  LedEffects e;
+  Rgb full[N], half[N], off[N];
+  e.onAction({ActionType::Sync, 0}, 0);
+  e.render(kIdle, 0, full, N);
+  e.setDim(128);
+  e.render(kIdle, 0, half, N);
+  TEST_ASSERT_TRUE(half[0].g <= full[0].g / 2 + 1 && half[0].g > 0);
+  e.setDim(0);
+  e.render(kIdle, 0, off, N);
+  for (size_t i = 0; i < N; i++) TEST_ASSERT_TRUE(isOff(off[i]));
+}
+
 int main(int, char **) {
   UNITY_BEGIN();
   RUN_TEST(test_power_estimate_full_white);
@@ -211,5 +224,6 @@ int main(int, char **) {
   RUN_TEST(test_wifi_mode_caps_and_shows_only_indicator);
   RUN_TEST(test_wifi_indicator_pulses);
   RUN_TEST(test_helper_missing_flashes_orange);
+  RUN_TEST(test_dim_scales_frame_and_zero_is_off);
   return UNITY_END();
 }
