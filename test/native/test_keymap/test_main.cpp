@@ -134,6 +134,65 @@ void test_keymap_equality() {
   TEST_ASSERT_FALSE(a == b);
 }
 
+// --- KeyMap blob ---
+
+void test_crc32_check_value() {
+  const uint8_t s[] = {'1', '2', '3', '4', '5', '6', '7', '8', '9'};
+  TEST_ASSERT_EQUAL_HEX32(0xCBF43926, crc32(s, sizeof s));
+}
+
+void test_blob_roundtrip() {
+  KeyMap m;
+  m.set(0, KeyType::App, "Calculator");
+  m.set(4, KeyType::Url, "https://www.linkedin.com");
+  m.set(7, KeyType::Keystroke, "cmd+shift+4");
+  uint8_t buf[kKeyMapBlobMax];
+  size_t n = serializeKeyMap(m, buf, sizeof buf);
+  TEST_ASSERT_TRUE(n > 0);
+  KeyMap back;
+  TEST_ASSERT_TRUE(deserializeKeyMap(buf, n, back));
+  TEST_ASSERT_TRUE(back == m);
+  TEST_ASSERT_EQUAL_HEX8(0x21, back.entry(7).ks.usage);  // keystroke re-parsed
+}
+
+void test_blob_rejects_corruption_and_keeps_target() {
+  KeyMap m;
+  m.set(0, KeyType::App, "Calculator");
+  uint8_t buf[kKeyMapBlobMax];
+  size_t n = serializeKeyMap(m, buf, sizeof buf);
+  KeyMap target;
+  target.set(1, KeyType::App, "Notes");
+  KeyMap before = target;
+
+  buf[10] ^= 0x01;  // payload bit flip -> CRC mismatch
+  TEST_ASSERT_FALSE(deserializeKeyMap(buf, n, target));
+  buf[10] ^= 0x01;
+  buf[0] = 'X';  // magic
+  TEST_ASSERT_FALSE(deserializeKeyMap(buf, n, target));
+  buf[0] = 'S';
+  TEST_ASSERT_FALSE(deserializeKeyMap(buf, n - 1, target));  // truncated
+  TEST_ASSERT_FALSE(deserializeKeyMap(buf, 0, target));
+  TEST_ASSERT_TRUE(target == before);
+}
+
+void test_blob_rejects_valid_crc_but_invalid_entry() {
+  // Attacker-crafted blob with a correct CRC must still pass KeyMap validation
+  KeyMap m;
+  uint8_t buf[kKeyMapBlobMax];
+  size_t n = serializeKeyMap(m, buf, sizeof buf);
+  buf[5] = 2;  // key 0 type -> Url, value "f13" is not http(s)
+  uint32_t c = crc32(buf, n - 4);
+  buf[n - 4] = c & 0xFF; buf[n - 3] = (c >> 8) & 0xFF; buf[n - 2] = (c >> 16) & 0xFF; buf[n - 1] = c >> 24;
+  KeyMap target;
+  TEST_ASSERT_FALSE(deserializeKeyMap(buf, n, target));
+}
+
+void test_blob_small_buffer_returns_zero() {
+  KeyMap m;
+  uint8_t buf[16];
+  TEST_ASSERT_EQUAL(0, serializeKeyMap(m, buf, sizeof buf));
+}
+
 int main(int, char **) {
   UNITY_BEGIN();
   RUN_TEST(test_ks_single_letter);
@@ -150,5 +209,10 @@ int main(int, char **) {
   RUN_TEST(test_keymap_value_length_limit);
   RUN_TEST(test_keymap_set_from_strings);
   RUN_TEST(test_keymap_equality);
+  RUN_TEST(test_crc32_check_value);
+  RUN_TEST(test_blob_roundtrip);
+  RUN_TEST(test_blob_rejects_corruption_and_keeps_target);
+  RUN_TEST(test_blob_rejects_valid_crc_but_invalid_entry);
+  RUN_TEST(test_blob_small_buffer_returns_zero);
   return UNITY_END();
 }

@@ -64,3 +64,58 @@ bool KeyMap::operator==(const KeyMap &o) const {
       return false;
   return true;
 }
+
+uint32_t crc32(const uint8_t *data, size_t n) {
+  uint32_t c = 0xFFFFFFFFu;
+  for (size_t i = 0; i < n; i++) {
+    c ^= data[i];
+    for (int k = 0; k < 8; k++) c = (c >> 1) ^ (0xEDB88320u & (0u - (c & 1u)));
+  }
+  return ~c;
+}
+
+static const uint8_t kMagic[4] = {'S', 'D', 'K', 'M'};
+static const uint8_t kBlobVersion = 1;
+
+size_t serializeKeyMap(const KeyMap &m, uint8_t *buf, size_t cap) {
+  size_t need = 4 + 1 + 4;
+  for (uint8_t i = 0; i < kKeyCount; i++) need += 2 + strlen(m.entry(i).value);
+  if (cap < need) return 0;
+  memcpy(buf, kMagic, 4);
+  size_t p = 4;
+  buf[p++] = kBlobVersion;
+  for (uint8_t i = 0; i < kKeyCount; i++) {
+    const KeyEntry &e = m.entry(i);
+    size_t len = strlen(e.value);
+    buf[p++] = static_cast<uint8_t>(e.type);
+    buf[p++] = static_cast<uint8_t>(len);
+    memcpy(buf + p, e.value, len);
+    p += len;
+  }
+  uint32_t c = crc32(buf, p);
+  for (int k = 0; k < 4; k++) buf[p++] = static_cast<uint8_t>(c >> (8 * k));
+  return p;
+}
+
+bool deserializeKeyMap(const uint8_t *buf, size_t n, KeyMap &out) {
+  if (n < 4 + 1 + 4 || memcmp(buf, kMagic, 4) != 0 || buf[4] != kBlobVersion) return false;
+  uint32_t stored = buf[n - 4] | (buf[n - 3] << 8) | (buf[n - 2] << 16) |
+                    (static_cast<uint32_t>(buf[n - 1]) << 24);
+  if (crc32(buf, n - 4) != stored) return false;
+  KeyMap m;
+  size_t p = 5;
+  for (uint8_t i = 0; i < kKeyCount; i++) {
+    if (p + 2 > n - 4) return false;
+    uint8_t type = buf[p++];
+    uint8_t len = buf[p++];
+    if (len > kKeyValueMax || p + len > n - 4) return false;
+    char v[kKeyValueMax + 1];
+    memcpy(v, buf + p, len);
+    v[len] = 0;
+    p += len;
+    if (m.set(i, static_cast<KeyType>(type), v) != KeyMapError::None) return false;
+  }
+  if (p != n - 4) return false;
+  out = m;
+  return true;
+}
