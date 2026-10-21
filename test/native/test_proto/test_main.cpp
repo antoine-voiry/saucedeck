@@ -1,6 +1,7 @@
 #include <unity.h>
 #include <string.h>
 #include "helper_proto.h"
+#include "host_link.h"
 
 void setUp() {}
 void tearDown() {}
@@ -95,6 +96,61 @@ void test_encode_mic() {
   TEST_ASSERT_EQUAL_UINT8(0, out[2]);
 }
 
+// --- HostLink ---
+
+void test_link_absent_until_hello() {
+  HostLink l;
+  TEST_ASSERT_FALSE(l.present(0));
+  l.onMessage({MSG_VOLUME, 50, 0}, 10);  // state without HELLO does not mean present
+  TEST_ASSERT_FALSE(l.present(10));
+  l.onMessage({MSG_HELLO, 1, 0}, 20);
+  TEST_ASSERT_TRUE(l.present(20));
+}
+
+void test_link_times_out_after_3s_silence() {
+  HostLink l;
+  l.onMessage({MSG_HELLO, 1, 0}, 1000);
+  TEST_ASSERT_TRUE(l.present(1000 + HostLink::kTimeoutMs - 1));
+  TEST_ASSERT_FALSE(l.present(1000 + HostLink::kTimeoutMs));
+  l.onMessage({MSG_HELLO, 1, 0}, 5000);
+  TEST_ASSERT_TRUE(l.present(5000));
+}
+
+void test_link_any_message_keeps_alive() {
+  HostLink l;
+  l.onMessage({MSG_HELLO, 1, 0}, 0);
+  l.onMessage({MSG_MIC, 30, 1}, 2500);
+  TEST_ASSERT_TRUE(l.present(5000));
+}
+
+void test_link_stores_volume_and_mic() {
+  HostLink l;
+  TEST_ASSERT_FALSE(l.hasVolume());
+  l.onMessage({MSG_HELLO, 1, 0}, 0);
+  l.onMessage({MSG_VOLUME, 42, 1}, 1);
+  l.onMessage({MSG_MIC, 75, 0}, 2);
+  TEST_ASSERT_TRUE(l.hasVolume() && l.hasMic());
+  TEST_ASSERT_EQUAL_UINT8(42, l.volumePercent());
+  TEST_ASSERT_TRUE(l.volumeMuted());
+  TEST_ASSERT_EQUAL_UINT8(75, l.micPercent());
+  TEST_ASSERT_FALSE(l.micMuted());
+}
+
+void test_link_usb_reset_clears_everything() {
+  HostLink l;
+  l.onMessage({MSG_HELLO, 1, 0}, 0);
+  l.onMessage({MSG_VOLUME, 42, 0}, 1);
+  l.onUsbReset();
+  TEST_ASSERT_FALSE(l.present(2));
+  TEST_ASSERT_FALSE(l.hasVolume());
+}
+
+void test_link_millis_wrap() {
+  HostLink l;
+  l.onMessage({MSG_HELLO, 1, 0}, 0xFFFFFF00u);
+  TEST_ASSERT_TRUE(l.present(0x00000100u));  // 512 ms later across wrap
+}
+
 int main(int, char **) {
   UNITY_BEGIN();
   RUN_TEST(test_decode_hello_volume_mic);
@@ -103,5 +159,11 @@ int main(int, char **) {
   RUN_TEST(test_encode_action);
   RUN_TEST(test_encode_action_rejects);
   RUN_TEST(test_encode_mic);
+  RUN_TEST(test_link_absent_until_hello);
+  RUN_TEST(test_link_times_out_after_3s_silence);
+  RUN_TEST(test_link_any_message_keeps_alive);
+  RUN_TEST(test_link_stores_volume_and_mic);
+  RUN_TEST(test_link_usb_reset_clears_everything);
+  RUN_TEST(test_link_millis_wrap);
   return UNITY_END();
 }
