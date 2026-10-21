@@ -21,7 +21,7 @@ Non-goals: Windows, OTA firmware updates, page login, encrypted storage, cloud a
 | --- | --- |
 | Settings UI | WiFiManager (tzapu) portal page: Wi-Fi join **and** key-map form (custom parameters) |
 | Wi-Fi activation | Hold both knobs ≥ 5 s. Off by default. Auto-off after 10 min or another 5 s hold |
-| Wi-Fi mode | Join home network (`http://saucedeck.local`); if no saved network or join fails in 20 s, open hotspot `SAUCEDECK-setup` (WPA2, password shown on LCD) |
+| Wi-Fi mode | Join home network (`http://saucedeck.local`); if no saved network or join fails in 20 s, open hotspot `SAUCEDECK-setup` (WPA2, random 8-digit password per session, shown on LCD, never stored) |
 | Wi-Fi password | Stored by WiFiManager / ESP-IDF in **plain flash**. Accepted risk: anyone with the deck and USB can read it |
 | Page protection | No login. Every save is staged and applied only after a knob 1 press on the deck (30 s window) |
 | Key map location | On the deck (NVS), so it travels with the deck |
@@ -58,7 +58,7 @@ helper never use the keyboard interface for data.
 ### 4.1 KeyMap
 - 12 entries `{type, value}`; `type` ∈ `Keystroke`, `App`, `Url`, `Shortcut`.
 - Default: every key `Keystroke` F13–F24 (today's behaviour).
-- `value`: 1–95 printable ASCII characters (0x20–0x7E).
+- `value`: 1–56 printable ASCII characters (0x20–0x7E). (Was 95; reduced 2026-10-21 so an ACTION fits one 63-byte vendor HID report.)
 - `Keystroke` value grammar: `mod+mod+key`, mods ∈ `cmd ctrl alt shift`, key = one of `a`–`z`,
   `0`–`9`, `f1`–`f24`, `space enter tab esc`. Exactly one non-modifier key. Anything else rejected.
 - `Url` must start with `http://` or `https://`.
@@ -84,13 +84,13 @@ helper never use the keyboard interface for data.
 - Exposes a status for LCD and LEDs.
 
 ### 4.5 PendingChange
-- Portal save → validated `KeyMap` staged; invalid fields are reported back on the page, nothing staged.
+- Portal save → validated `KeyMap` staged; an invalid field shows "Invalid key N" on the LCD (not on the page, 2026-10-21), nothing staged.
 - LCD: "Apply changes? press knob 1" with a 30 s countdown.
 - Knob 1 press in the window → commit to NVS and make it live. While pending, knob 1 = confirm (not mute).
 - Timeout, or a new save → previous staged map discarded.
 
 ### 4.6 HelperProto (vendor HID messages, 64-byte reports)
-Header: `ver (1) | type | len`, payload ≤ 61 bytes. Parser rejects bad version, unknown type,
+Header: `ver (1) | type | len`, payload ≤ 60 bytes (63-byte reports, Arduino `USBHIDVendor` default). Parser rejects bad version, unknown type,
 `len` > 61, out-of-range values. Fuzz-style tests on random input.
 
 | Dir | Type | Payload |
