@@ -98,64 +98,77 @@ void test_volume_zero_max_does_not_divide_by_zero() {
   TEST_ASSERT_EQUAL_UINT8(100, v.percent());
 }
 
-// --- KnobChord: knob switch alone -> action on release; both held -> SYNC once ---
+// --- KnobChord v2: single knob -> on release; both: release < 5 s = SYNC, 5 s held = WIFI ---
 
 static const uint16_t S1 = 1u << 12, S2 = 1u << 13;
 
 void test_chord_single_knob_fires_on_release() {
   KnobChord c(S1, S2);
-  TEST_ASSERT_EQUAL_HEX8(CHORD_NONE, c.update(S1));
-  TEST_ASSERT_EQUAL_HEX8(CHORD_NONE, c.update(S1));
-  TEST_ASSERT_EQUAL_HEX8(CHORD_KNOB1, c.update(0));
+  TEST_ASSERT_EQUAL_HEX8(CHORD_NONE, c.update(S1, 0));
+  TEST_ASSERT_EQUAL_HEX8(CHORD_NONE, c.update(S1, 10));
+  TEST_ASSERT_EQUAL_HEX8(CHORD_KNOB1, c.update(0, 20));
 }
 
 void test_chord_knob2_alone() {
   KnobChord c(S1, S2);
-  c.update(S2);
-  TEST_ASSERT_EQUAL_HEX8(CHORD_KNOB2, c.update(0));
+  c.update(S2, 0);
+  TEST_ASSERT_EQUAL_HEX8(CHORD_KNOB2, c.update(0, 10));
 }
 
-void test_chord_both_pressed_fires_sync_once() {
+void test_chord_sync_fires_on_release_before_5s() {
   KnobChord c(S1, S2);
-  c.update(S1);
-  TEST_ASSERT_EQUAL_HEX8(CHORD_SYNC, c.update(S1 | S2));
-  TEST_ASSERT_EQUAL_HEX8(CHORD_NONE, c.update(S1 | S2));
+  TEST_ASSERT_EQUAL_HEX8(CHORD_NONE, c.update(S1 | S2, 0));
+  TEST_ASSERT_EQUAL_HEX8(CHORD_NONE, c.update(S1 | S2, 4999));
+  TEST_ASSERT_EQUAL_HEX8(CHORD_NONE, c.update(S2, 5000));  // one up: chord still running
+  TEST_ASSERT_EQUAL_HEX8(CHORD_SYNC, c.update(0, 5010));
 }
 
-void test_chord_releases_after_sync_fire_nothing() {
+void test_chord_wifi_fires_once_at_5s_while_held() {
   KnobChord c(S1, S2);
-  c.update(S1 | S2);
-  TEST_ASSERT_EQUAL_HEX8(CHORD_NONE, c.update(S2));  // knob 1 up first
-  TEST_ASSERT_EQUAL_HEX8(CHORD_NONE, c.update(0));
+  c.update(S1 | S2, 100);
+  TEST_ASSERT_EQUAL_HEX8(CHORD_NONE, c.update(S1 | S2, 5099));
+  TEST_ASSERT_EQUAL_HEX8(CHORD_WIFI, c.update(S1 | S2, 5100));
+  TEST_ASSERT_EQUAL_HEX8(CHORD_NONE, c.update(S1 | S2, 9000));
+  TEST_ASSERT_EQUAL_HEX8(CHORD_NONE, c.update(0, 9010));  // no SYNC after WIFI
 }
 
-void test_chord_simultaneous_release_after_sync() {
+void test_chord_releases_after_chord_fire_no_single_knob() {
   KnobChord c(S1, S2);
-  c.update(S1 | S2);
-  TEST_ASSERT_EQUAL_HEX8(CHORD_NONE, c.update(0));
+  c.update(S1 | S2, 0);
+  TEST_ASSERT_EQUAL_HEX8(CHORD_NONE, c.update(S2, 100));
+  TEST_ASSERT_EQUAL_HEX8(CHORD_SYNC, c.update(0, 200));
 }
 
 void test_chord_rearms_after_both_released() {
   KnobChord c(S1, S2);
-  c.update(S1 | S2);
-  c.update(0);
-  c.update(S1);
-  TEST_ASSERT_EQUAL_HEX8(CHORD_KNOB1, c.update(0));
+  c.update(S1 | S2, 0);
+  c.update(0, 10);
+  c.update(S1, 20);
+  TEST_ASSERT_EQUAL_HEX8(CHORD_KNOB1, c.update(0, 30));
 }
 
 void test_chord_still_held_partner_blocks_single_action() {
-  // After sync, knob 2 still held, knob 1 pressed again and released: still part of the chord
+  // Knob 2 still held, knob 1 pressed again and released: still part of the chord
   KnobChord c(S1, S2);
-  c.update(S1 | S2);
-  c.update(S2);
-  c.update(S1 | S2);
-  TEST_ASSERT_EQUAL_HEX8(CHORD_NONE, c.update(S2));
+  c.update(S1 | S2, 0);
+  c.update(S2, 10);
+  c.update(S1 | S2, 20);
+  TEST_ASSERT_EQUAL_HEX8(CHORD_NONE, c.update(S2, 30));
 }
 
 void test_chord_ignores_other_bits() {
   KnobChord c(S1, S2);
-  TEST_ASSERT_EQUAL_HEX8(CHORD_NONE, c.update(0x0FFF));
-  TEST_ASSERT_EQUAL_HEX8(CHORD_NONE, c.update(0));
+  TEST_ASSERT_EQUAL_HEX8(CHORD_NONE, c.update(0x0FFF, 0));
+  TEST_ASSERT_EQUAL_HEX8(CHORD_NONE, c.update(0, 10));
+}
+
+void test_chord_countdown() {
+  KnobChord c(S1, S2);
+  TEST_ASSERT_EQUAL_UINT32(0, c.bothHeldMs(0));
+  c.update(S1 | S2, 1000);
+  TEST_ASSERT_EQUAL_UINT32(1500, c.bothHeldMs(2500));
+  c.update(S1, 2600);
+  TEST_ASSERT_EQUAL_UINT32(0, c.bothHeldMs(2700));
 }
 
 int main(int, char **) {
@@ -173,11 +186,12 @@ int main(int, char **) {
   RUN_TEST(test_volume_zero_max_does_not_divide_by_zero);
   RUN_TEST(test_chord_single_knob_fires_on_release);
   RUN_TEST(test_chord_knob2_alone);
-  RUN_TEST(test_chord_both_pressed_fires_sync_once);
-  RUN_TEST(test_chord_releases_after_sync_fire_nothing);
-  RUN_TEST(test_chord_simultaneous_release_after_sync);
+  RUN_TEST(test_chord_sync_fires_on_release_before_5s);
+  RUN_TEST(test_chord_wifi_fires_once_at_5s_while_held);
+  RUN_TEST(test_chord_releases_after_chord_fire_no_single_knob);
   RUN_TEST(test_chord_rearms_after_both_released);
   RUN_TEST(test_chord_still_held_partner_blocks_single_action);
   RUN_TEST(test_chord_ignores_other_bits);
+  RUN_TEST(test_chord_countdown);
   return UNITY_END();
 }

@@ -43,7 +43,7 @@ class Deck {
     }
     held_ = now;
 
-    uint8_t chord = chord_.update(now);
+    uint8_t chord = chord_.update(now, nowMs);
     if (chord & CHORD_KNOB1) {
       out.push(ActionType::Consumer, static_cast<uint8_t>(ConsumerCode::Mute));
       speaker_.toggleMute();
