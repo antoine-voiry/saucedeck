@@ -160,6 +160,36 @@ void test_millis_wrap_flash_still_fades() {
   TEST_ASSERT_TRUE(allEqual(px, N, idle[0]));
 }
 
+void test_wifi_mode_caps_and_shows_only_indicator() {
+  LedEffects e;
+  e.setWifi(true);
+  e.onAction({ActionType::KeyDown, 0}, 0);  // flash suppressed in Wi-Fi mode
+  Rgb px[N];
+  for (uint32_t t = 0; t < 2000; t += 50) {
+    e.render(kIdle, t, px, N);
+    TEST_ASSERT_TRUE(estimateMilliamps(px, N) <= LedEffects::kWifiBudgetMa);
+    for (size_t i = 1; i < N; i++) TEST_ASSERT_TRUE(isOff(px[i]));
+    TEST_ASSERT_EQUAL_UINT8(0, px[0].r);
+  }
+}
+
+void test_wifi_indicator_pulses() {
+  LedEffects e;
+  e.setWifi(true);
+  Rgb a[N], b[N];
+  e.render(kIdle, 0, a, N);
+  e.render(kIdle, 500, b, N);
+  TEST_ASSERT_TRUE(a[0].b != b[0].b);
+}
+
+void test_helper_missing_flashes_orange() {
+  LedEffects e;
+  Rgb px[N];
+  e.onAction({ActionType::HelperMissing, 3}, 0);
+  e.render(kIdle, 0, px, N);
+  TEST_ASSERT_TRUE(px[0].r > 150 && px[0].g < 80);
+}
+
 int main(int, char **) {
   UNITY_BEGIN();
   RUN_TEST(test_power_estimate_full_white);
@@ -178,5 +208,8 @@ int main(int, char **) {
   RUN_TEST(test_volume_gauge_times_out);
   RUN_TEST(test_render_respects_power_budget);
   RUN_TEST(test_millis_wrap_flash_still_fades);
+  RUN_TEST(test_wifi_mode_caps_and_shows_only_indicator);
+  RUN_TEST(test_wifi_indicator_pulses);
+  RUN_TEST(test_helper_missing_flashes_orange);
   return UNITY_END();
 }

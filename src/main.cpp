@@ -105,6 +105,6 @@ void loop() {
   run(actions);
 
   const VolumeState &spk = deck.speaker();
-  displayUpdate({spk.percent(), spk.muted(), deck.micMuted()}, millis());
+  displayUpdate({spk.percent(), spk.muted(), deck.micMuted(), false, 0, BANNER_NONE, 0}, millis());
   ledsUpdate({spk.percent(), spk.muted(), deck.micMuted()}, millis());
 }
