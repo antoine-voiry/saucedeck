@@ -357,6 +357,61 @@ void test_deck_knob1_turn_while_knob2_held_is_volume() {
   TEST_ASSERT_TRUE(has(r, ActionType::HelperMicMute));  // knob 2 itself was not turned
 }
 
+// --- staged key map ---
+
+void test_deck_stage_then_knob1_commits_without_mute() {
+  Deck d;
+  KeyMap m;
+  m.set(0, KeyType::App, "Notes");
+  uint32_t t = 0;
+  d.stage(m, t);
+  TEST_ASSERT_TRUE(d.pending());
+  hold(d, DECK_ENC1_SW, t);
+  ActionList a = hold(d, 0, t);
+  TEST_ASSERT_TRUE(has(a, ActionType::ReleaseAll));
+  TEST_ASSERT_TRUE(has(a, ActionType::KeyMapCommitted));
+  TEST_ASSERT_FALSE(has(a, ActionType::Consumer, (uint8_t)ConsumerCode::Mute));
+  TEST_ASSERT_FALSE(d.speaker().muted());
+  TEST_ASSERT_FALSE(d.pending());
+  TEST_ASSERT_TRUE(d.keyMap().entry(0).type == KeyType::App);
+}
+
+void test_deck_stage_times_out_and_discards() {
+  Deck d;
+  KeyMap m;
+  m.set(0, KeyType::App, "Notes");
+  d.stage(m, 1000);
+  ActionList a;
+  d.onKeys(0, 1000 + Deck::kConfirmMs - 1, a);
+  TEST_ASSERT_TRUE(d.pending());
+  d.onKeys(0, 1000 + Deck::kConfirmMs, a);
+  TEST_ASSERT_TRUE(has(a, ActionType::KeyMapDiscarded));
+  TEST_ASSERT_FALSE(d.pending());
+  TEST_ASSERT_TRUE(d.keyMap().entry(0).type == KeyType::Keystroke);
+}
+
+void test_deck_new_stage_replaces_and_restarts_window() {
+  Deck d;
+  KeyMap a1, a2;
+  a1.set(0, KeyType::App, "Notes");
+  a2.set(0, KeyType::App, "Mail");
+  d.stage(a1, 0);
+  d.stage(a2, 20000);
+  TEST_ASSERT_EQUAL_UINT32(Deck::kConfirmMs - 5000, d.pendingMsLeft(25000));
+  uint32_t t = 25000;
+  hold(d, DECK_ENC1_SW, t);
+  hold(d, 0, t);
+  TEST_ASSERT_EQUAL_STRING("Mail", d.keyMap().entry(0).value);
+}
+
+void test_deck_knob1_mutes_again_when_nothing_pending() {
+  Deck d;
+  uint32_t t = 0;
+  hold(d, DECK_ENC1_SW, t);
+  ActionList a = hold(d, 0, t);
+  TEST_ASSERT_TRUE(has(a, ActionType::Consumer, (uint8_t)ConsumerCode::Mute));
+}
+
 int main(int, char **) {
   UNITY_BEGIN();
   RUN_TEST(test_deck_key_press_and_release);
@@ -387,5 +442,9 @@ int main(int, char **) {
   RUN_TEST(test_deck_knob2_mute_without_helper_uses_local_chord);
   RUN_TEST(test_deck_knob2_turn_not_held_still_skips_tracks);
   RUN_TEST(test_deck_knob1_turn_while_knob2_held_is_volume);
+  RUN_TEST(test_deck_stage_then_knob1_commits_without_mute);
+  RUN_TEST(test_deck_stage_times_out_and_discards);
+  RUN_TEST(test_deck_new_stage_replaces_and_restarts_window);
+  RUN_TEST(test_deck_knob1_mutes_again_when_nothing_pending);
   return UNITY_END();
 }
