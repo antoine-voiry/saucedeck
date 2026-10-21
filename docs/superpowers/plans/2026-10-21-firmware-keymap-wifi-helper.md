@@ -18,6 +18,8 @@
 - Vendor HID report size **63 bytes** (Arduino `USBHIDVendor` default). Header 3 bytes → payload ≤ 60.
 - Key value max **56** printable ASCII chars (spec delta, see "Spec deltas" at the end).
 - Wi-Fi on: LED frame cap **30 mA**; Wi-Fi off: **250 mA** (existing).
+- Idle dimming: full until **120000 ms** without input, linear fade to off at **240000 ms**; input wakes and still acts.
+- Flash: production + Wi-Fi exceeds the default 1.25 MB app slot (spike alone 83.4 %) → switch to `huge_app.csv` in Task 16 after verifying 4 MB flash with esptool.
 - Timings: Wi-Fi hold **5000 ms**, Wi-Fi auto-off **600000 ms**, confirm window **30000 ms**, knob 2 turn qualifies after **150 ms** held, helper presence timeout **3000 ms**, bus-loss **20 ms** (existing).
 - Commits end with `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>`. Run commands from `/Users/antoine/saucedeck`. `P=~/.platformio/penv/bin/pio`.
 - Hardware-only behaviour: mark commits "bench-verified" or "not bench-verified" (CLAUDE.md).
@@ -35,6 +37,7 @@
 | `lib/deck_core/src/deck.h` (modify) | Routing: keymap, helper presence, knob 2 gesture, pending change, Wi-Fi chord |
 | `lib/deck_core/src/led_effects.h` (modify) | Wi-Fi mode + new action types |
 | `lib/deck_core/src/ui_layout.h` (modify) | Mic level + banner in ScreenState, dirty flags |
+| `lib/deck_core/src/idle_dimmer.h` | Inactivity → brightness level 0..255 |
 | `src/keymap_store.cpp/.h` | NVS load/save via Preferences |
 | `src/helper_hid.cpp/.h` | USBHIDVendor glue → HelperProto / HostLink |
 | `src/wifi_portal.cpp/.h` | WiFiManager portal, params → staged KeyMap; only Wi-Fi file |
@@ -2103,6 +2106,167 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 
 ---
 
+### Task 13b: IdleDimmer + LED dim + LCD backlight fade
+
+**Files:**
+- Create: `lib/deck_core/src/idle_dimmer.h`
+- Modify: `lib/deck_core/src/led_effects.h`, `src/display.cpp`, `src/display.h`, `src/leds.cpp`, `src/leds.h`, `src/main.cpp`
+- Test: `test/native/test_ui/test_main.cpp` (dimmer), `test/native/test_led/test_main.cpp` (dim scale)
+
+**Interfaces:**
+- Produces:
+```cpp
+class IdleDimmer {
+ public:
+  static constexpr uint32_t kFadeStartMs = 120000;
+  static constexpr uint32_t kOffMs = 240000;
+  void onActivity(uint32_t nowMs);
+  uint8_t level(uint32_t nowMs) const;   // 255 full .. 0 off
+};
+```
+- `LedEffects::setDim(uint8_t level)` (applied after the power limit); `void ledsSetDim(uint8_t level);`, `void displaySetDim(uint8_t level);`.
+
+- [ ] **Step 1: Failing tests**
+
+`test/native/test_ui/test_main.cpp` (add `#include "idle_dimmer.h"`):
+```cpp
+void test_dimmer_full_until_fade_start() {
+  IdleDimmer d;
+  d.onActivity(1000);
+  TEST_ASSERT_EQUAL_UINT8(255, d.level(1000));
+  TEST_ASSERT_EQUAL_UINT8(255, d.level(1000 + IdleDimmer::kFadeStartMs - 1));
+}
+
+void test_dimmer_linear_fade_and_off() {
+  IdleDimmer d;
+  d.onActivity(0);
+  TEST_ASSERT_EQUAL_UINT8(255, d.level(IdleDimmer::kFadeStartMs));
+  TEST_ASSERT_EQUAL_UINT8(127, d.level(180000));  // halfway
+  TEST_ASSERT_EQUAL_UINT8(0, d.level(IdleDimmer::kOffMs));
+  TEST_ASSERT_EQUAL_UINT8(0, d.level(IdleDimmer::kOffMs + 999999));
+}
+
+void test_dimmer_activity_wakes_instantly() {
+  IdleDimmer d;
+  d.onActivity(0);
+  TEST_ASSERT_EQUAL_UINT8(0, d.level(300000));
+  d.onActivity(300000);
+  TEST_ASSERT_EQUAL_UINT8(255, d.level(300000));
+}
+
+void test_dimmer_millis_wrap() {
+  IdleDimmer d;
+  d.onActivity(0xFFFFFF00u);
+  TEST_ASSERT_EQUAL_UINT8(255, d.level(0x00001000u));
+}
+```
+`test/native/test_led/test_main.cpp`:
+```cpp
+void test_dim_scales_frame_and_zero_is_off() {
+  LedEffects e;
+  Rgb full[N], half[N], off[N];
+  e.onAction({ActionType::Sync, 0}, 0);
+  e.render(kIdle, 0, full, N);
+  e.setDim(128);
+  e.render(kIdle, 0, half, N);
+  TEST_ASSERT_TRUE(half[0].g <= full[0].g / 2 + 1 && half[0].g > 0);
+  e.setDim(0);
+  e.render(kIdle, 0, off, N);
+  for (size_t i = 0; i < N; i++) TEST_ASSERT_TRUE(isOff(off[i]));
+}
+```
+Stubs: `IdleDimmer::level` returns 255; `setDim` no-op.
+
+- [ ] **Step 2: Run red**
+
+Run: `$P test -e native -f native/test_ui -f native/test_led`
+Expected: FAIL `test_dimmer_linear_fade_and_off` (`Expected 127 Was 255`), `test_dim_scales_frame_and_zero_is_off`.
+
+- [ ] **Step 3: Implement**
+
+`lib/deck_core/src/idle_dimmer.h`:
+```cpp
+#pragma once
+#include <stdint.h>
+
+// LEDs + LCD fade out when the deck is idle: full for kFadeStartMs after the last input,
+// then linear to 0 at kOffMs. Input wakes instantly (and still acts, see Deck).
+class IdleDimmer {
+ public:
+  static constexpr uint32_t kFadeStartMs = 120000;
+  static constexpr uint32_t kOffMs = 240000;
+
+  void onActivity(uint32_t nowMs) { last_ = nowMs; }
+
+  uint8_t level(uint32_t nowMs) const {
+    uint32_t e = nowMs - last_;
+    if (e < kFadeStartMs) return 255;
+    if (e >= kOffMs) return 0;
+    return static_cast<uint8_t>(255u * (kOffMs - e) / (kOffMs - kFadeStartMs));
+  }
+
+ private:
+  uint32_t last_ = 0;
+};
+```
+`led_effects.h`: add `void setDim(uint8_t level) { dim_ = level; }`, private `uint8_t dim_ = 255;`, and at the end of **both** render paths (Wi-Fi and normal), after `limitPower(...)`:
+```cpp
+    if (dim_ != 255)
+      for (size_t i = 0; i < n; i++)
+        px[i] = {static_cast<uint8_t>(px[i].r * dim_ / 255), static_cast<uint8_t>(px[i].g * dim_ / 255),
+                 static_cast<uint8_t>(px[i].b * dim_ / 255)};
+```
+
+- [ ] **Step 4: Run green**
+
+Run: `$P test -e native`
+Expected: all pass.
+
+- [ ] **Step 5: Glue**
+
+`src/leds.h/.cpp`: `void ledsSetDim(uint8_t level) { effects.setDim(level); }`.
+`src/display.h/.cpp`: backlight becomes PWM. In `displayBegin()` replace the `pinMode/digitalWrite(TFT_BL_PIN, ...)` lines with:
+```cpp
+  ledcAttach(TFT_BL_PIN, 5000, 8);  // core 3.x LEDC API; 5 kHz, 8 bit
+  gpio_set_drive_capability(static_cast<gpio_num_t>(TFT_BL_PIN), GPIO_DRIVE_CAP_1);
+  ledcWrite(TFT_BL_PIN, 255);
+```
+and add:
+```cpp
+static bool panelAsleep = false;
+void displaySetDim(uint8_t level) {
+  ledcWrite(TFT_BL_PIN, static_cast<uint32_t>(level) * level / 255);  // squared: perceptual fade
+  if (level == 0 && !panelAsleep) { tft.enableSleep(true); panelAsleep = true; }
+  if (level > 0 && panelAsleep) { tft.enableSleep(false); panelAsleep = false; }
+}
+```
+`src/main.cpp`: `static IdleDimmer dimmer;`; in `loop()` after `run(actions);`:
+```cpp
+  if (actions.count || d1 || d2 || deck.pending() || wifi.on() || deck.chordHeldMs(now) > 0)
+    dimmer.onActivity(now);
+  uint8_t dim = dimmer.level(now);
+  ledsSetDim(dim);
+  displaySetDim(dim);
+```
+(`wifi` exists from Task 16; until then use `actions.count || d1 || d2 || deck.pending() || deck.chordHeldMs(now) > 0`.)
+
+- [ ] **Step 6: Build + bench**
+
+Run: `$P run -e saucedeck -e bringup 2>&1 | grep -cE 'warning:'` → `0`. Flash. Bench: leave the deck alone; at ~2 min LEDs + screen start fading, off by ~4 min; press any key → instant full brightness and the key's F-key arrives on the Mac. Log result.
+
+- [ ] **Step 7: Commit**
+
+```bash
+git add lib/deck_core/src/idle_dimmer.h lib/deck_core/src/led_effects.h test/native/test_ui test/native/test_led src
+git commit -m "Idle dimming: fade LEDs + LCD backlight after 120 s, off at 240 s
+
+LCD backlight now PWM (LEDC) on GPIO9, panel sleeps at 0. <bench result>
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+```
+
+---
+
 ### Task 14: Glue — keymap execution + NVS store
 
 **Files:**
@@ -2563,6 +2727,10 @@ static void drawBanner(uint8_t b, uint8_t arg) {
 }
 ```
 In `displayUpdate`: `if (dirty & DIRTY_BANNER) drawBanner(cur.banner, cur.bannerArg);`. In `drawMic`, when `micLevelKnown`, print `"%3u%%"` of `micPercent` instead of `" LIVE"` (pass `const ScreenState &` to `drawMic`).
+
+- [ ] **Step 5b: Bigger app partition**
+
+Verify flash size first: `~/.platformio/penv/bin/python ~/.platformio/packages/tool-esptoolpy/esptool.py --port $(ls /dev/cu.usbmodem* | head -1) flash_id` → expect `Detected flash size: 4MB` (record in `docs/kb/esp32s3.md`). Then in `platformio.ini` `[esp32s3]` set `board_build.partitions = huge_app.csv` (NVS stays at 0x9000/0x5000, so the saved key map survives; no OTA is used). First flash after the change rewrites the partition table: `$P run -e saucedeck -t upload` as usual.
 
 - [ ] **Step 6: Build**
 

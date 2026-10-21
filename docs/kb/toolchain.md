@@ -19,3 +19,4 @@
 - **Upload after 1200 bps touch fails "Couldn't find a board"; explicit `--upload-port` works. Port name changes C1 ↔ C2 between bootloader/app.** `[verified: bench 2026-10-18]`
 - **Adafruit ST7789 lib 1.11.0 → pulls seesaw 1.7.9 → pulls registry `arduino-libraries/SD`. Unpinned it is downloaded but not linked; pinning it in `lib_deps` forces it into the build and it fails (`Sd2PinMap.h: Architecture or board not supported`).** `[verified: build output, 2026-10-18]`
 - **Upload via 1200 bps touch: ROM download mode can appear as a different port (`/dev/cu.usbmodem21101`) than the app (`…A0C1`/`…A0C2`); esptool followed it and flashed OK. Only one Espressif device on USB at the time. First attempt timed out (FAILED, 15 s), retry OK.** `[verified: bench 2026-10-19]`
+- **Spike: WiFiManager 2.0.17 + WiFi on pioarduino 55.03.35 builds clean (0 warnings); spike alone = 1,093,783 B = 83.4 % of the default 1,310,720 B app partition.** `[verified: build output 2026-10-21]`
