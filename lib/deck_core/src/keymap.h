@@ -31,3 +31,9 @@ class KeyMap {
  private:
   KeyEntry entries_[kKeyCount];
 };
+
+uint32_t crc32(const uint8_t *data, size_t n);  // IEEE 802.3
+constexpr size_t kKeyMapBlobMax = 4 + 1 + kKeyCount * (2 + kKeyValueMax) + 4;
+// NVS blob: 'SDKM', version 1, 12 x [type, len, value], CRC32 LE. Load re-validates every entry.
+size_t serializeKeyMap(const KeyMap &m, uint8_t *buf, size_t cap);  // 0 if cap too small
+bool deserializeKeyMap(const uint8_t *buf, size_t n, KeyMap &out);  // false -> out untouched
