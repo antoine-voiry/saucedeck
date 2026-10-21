@@ -87,7 +87,9 @@ void test_deck_sync_resets_speaker_and_mic_without_hid() {
   hold(d, DECK_ENC2_SW, t);
   hold(d, 0, t);  // mic muted
   a = hold(d, DECK_ENC1_SW | DECK_ENC2_SW, t);
-  TEST_ASSERT_EQUAL(1, a.count);  // local Sync notification only, no HID action
+  TEST_ASSERT_EQUAL(0, a.count);  // nothing until release
+  a = hold(d, 0, t);
+  TEST_ASSERT_EQUAL(1, a.count);  // local Sync only, no HID action
   TEST_ASSERT_TRUE(has(a, ActionType::Sync));
   TEST_ASSERT_EQUAL_UINT8(0, d.speaker().steps());
   TEST_ASSERT_FALSE(d.micMuted());
