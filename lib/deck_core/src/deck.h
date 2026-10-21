@@ -39,6 +39,10 @@ class Deck {
   void onKeys(uint16_t pressedRaw, uint32_t nowMs, ActionList &out) {
     busLost_ = false;
     failing_ = false;
+    if (pending_ && nowMs - stagedAt_ >= kConfirmMs) {
+      pending_ = false;
+      out.push(ActionType::KeyMapDiscarded);
+    }
     uint16_t now = debounce_.update(pressedRaw, nowMs);
     uint16_t changed = (now ^ held_) & DECK_KEYS;
     for (uint8_t i = 0; i < 12; i++) {
@@ -60,8 +64,16 @@ class Deck {
 
     uint8_t chord = chord_.update(now, nowMs);
     if (chord & CHORD_KNOB1) {
-      out.push(ActionType::Consumer, static_cast<uint8_t>(ConsumerCode::Mute));
-      speaker_.toggleMute();
+      if (pending_) {  // physical confirm of a portal change
+        out.push(ActionType::ReleaseAll);  // keys held under the old map must not stick
+        keymap_ = staged_;
+        held_ &= static_cast<uint16_t>(~DECK_KEYS);  // still-held keys re-press under the new map
+        pending_ = false;
+        out.push(ActionType::KeyMapCommitted);
+      } else {
+        out.push(ActionType::Consumer, static_cast<uint8_t>(ConsumerCode::Mute));
+        speaker_.toggleMute();
+      }
     }
     if ((chord & CHORD_KNOB2) && !k2Turned_) {  // push+turn adjusted the mic: no mute on release
       if (helper_) {
@@ -77,6 +89,20 @@ class Deck {
       out.push(ActionType::Sync);
     }
     if (chord & CHORD_WIFI) out.push(ActionType::WifiToggle);
+  }
+
+  static constexpr uint32_t kConfirmMs = 30000;
+  // Portal save -> staged; it only goes live after a knob 1 press within kConfirmMs.
+  void stage(const KeyMap &m, uint32_t nowMs) {
+    staged_ = m;
+    stagedAt_ = nowMs;
+    pending_ = true;
+  }
+  bool pending() const { return pending_; }
+  uint32_t pendingMsLeft(uint32_t nowMs) const {
+    if (!pending_) return 0;
+    uint32_t e = nowMs - stagedAt_;
+    return e >= kConfirmMs ? 0 : kConfirmMs - e;
   }
 
   static constexpr uint32_t kMicTurnAfterMs = 150;
@@ -151,6 +177,9 @@ class Deck {
   bool failing_ = false;
   KeyMap keymap_;
   bool helper_ = false;
+  KeyMap staged_;
+  uint32_t stagedAt_ = 0;
+  bool pending_ = false;
   uint32_t k2Since_ = 0;
   bool k2Turned_ = false, k2MissingSent_ = false;
   uint32_t failSince_ = 0;
