@@ -83,7 +83,7 @@ void test_deck_sync_resets_speaker_and_mic_without_hid() {
   Deck d;
   uint32_t t = 0;
   ActionList a;
-  d.onEncoders(3, 0, a);
+  d.onEncoders(3, 0, 0, a);
   hold(d, DECK_ENC2_SW, t);
   hold(d, 0, t);  // mic muted
   a = hold(d, DECK_ENC1_SW | DECK_ENC2_SW, t);
@@ -100,9 +100,9 @@ void test_deck_sync_resets_speaker_and_mic_without_hid() {
 void test_deck_knob1_rotation_sends_volume_and_tracks() {
   Deck d;
   ActionList a;
-  d.onEncoders(1, 0, a);
-  d.onEncoders(1, 0, a);
-  d.onEncoders(-1, 0, a);
+  d.onEncoders(1, 0, 0, a);
+  d.onEncoders(1, 0, 0, a);
+  d.onEncoders(-1, 0, 0, a);
   TEST_ASSERT_EQUAL(3, a.count);
   TEST_ASSERT_TRUE(a.items[0].type == ActionType::Consumer);
   TEST_ASSERT_EQUAL_UINT8((uint8_t)ConsumerCode::VolumeUp, a.items[0].value);
@@ -113,15 +113,15 @@ void test_deck_knob1_rotation_sends_volume_and_tracks() {
 void test_deck_multi_detent_sends_one_report_per_step() {
   Deck d;
   ActionList a;
-  d.onEncoders(3, 0, a);
+  d.onEncoders(3, 0, 0, a);
   TEST_ASSERT_EQUAL(3, a.count);
 }
 
 void test_deck_knob2_rotation_skips_tracks() {
   Deck d;
   ActionList a;
-  d.onEncoders(0, 1, a);
-  d.onEncoders(0, -1, a);
+  d.onEncoders(0, 1, 0, a);
+  d.onEncoders(0, -1, 0, a);
   TEST_ASSERT_EQUAL(2, a.count);
   TEST_ASSERT_EQUAL_UINT8((uint8_t)ConsumerCode::NextTrack, a.items[0].value);
   TEST_ASSERT_EQUAL_UINT8((uint8_t)ConsumerCode::PrevTrack, a.items[1].value);
@@ -214,12 +214,12 @@ void test_deck_volume_steps_match_reports_sent() {
   // Bug: rotate() counted every detent but ActionList drops past kMax -> display drift
   Deck d;
   ActionList a;
-  d.onEncoders(40, 0, a);
+  d.onEncoders(40, 0, 0, a);
   TEST_ASSERT_EQUAL(ActionList::kMax, a.count);
   TEST_ASSERT_EQUAL_UINT8(16, d.speaker().steps());  // clamped by maxSteps anyway
   Deck e(64);
   ActionList b;
-  e.onEncoders(40, 0, b);
+  e.onEncoders(40, 0, 0, b);
   TEST_ASSERT_EQUAL_UINT8(b.count, e.speaker().steps());
 }
 
@@ -276,6 +276,87 @@ void test_deck_wifi_chord_emits_toggle_once() {
   TEST_ASSERT_FALSE(has(b, ActionType::Sync));
 }
 
+// --- knob 2 gesture ---
+
+static void pressKnob2(Deck &d, uint32_t &t) {
+  ActionList a;
+  d.onKeys(DECK_ENC2_SW, t, a);
+  t += 30;
+  d.onKeys(DECK_ENC2_SW, t, a);  // debounced press at t
+}
+
+void test_deck_knob2_push_turn_with_helper_sends_mic_steps() {
+  Deck d;
+  d.setHelperPresent(true);
+  uint32_t t = 0;
+  pressKnob2(d, t);
+  t += Deck::kMicTurnAfterMs;
+  ActionList a;
+  d.onEncoders(0, 2, t, a);
+  d.onEncoders(0, -1, t, a);
+  TEST_ASSERT_EQUAL(3, a.count);
+  TEST_ASSERT_TRUE(a.items[0].type == ActionType::MicUp);
+  TEST_ASSERT_TRUE(a.items[2].type == ActionType::MicDown);
+  ActionList r = hold(d, 0, t);
+  TEST_ASSERT_EQUAL(0, r.count);  // release after a turn: no mute
+}
+
+void test_deck_knob2_turn_in_first_150ms_ignored_and_still_mutes() {
+  Deck d;
+  d.setHelperPresent(true);
+  uint32_t t = 0;
+  pressKnob2(d, t);
+  ActionList a;
+  d.onEncoders(0, 1, t + Deck::kMicTurnAfterMs - 1, a);  // shaft nudge while pressing
+  TEST_ASSERT_EQUAL(0, a.count);
+  ActionList r = hold(d, 0, t);
+  TEST_ASSERT_TRUE(has(r, ActionType::HelperMicMute));
+}
+
+void test_deck_knob2_push_turn_without_helper_reports_missing_once() {
+  Deck d;
+  uint32_t t = 0;
+  pressKnob2(d, t);
+  t += Deck::kMicTurnAfterMs;
+  ActionList a;
+  d.onEncoders(0, 1, t, a);
+  d.onEncoders(0, 1, t, a);
+  TEST_ASSERT_EQUAL(1, a.count);
+  TEST_ASSERT_TRUE(has(a, ActionType::HelperMissing, 0xFF));
+  ActionList r = hold(d, 0, t);
+  TEST_ASSERT_EQUAL(0, r.count);
+}
+
+void test_deck_knob2_mute_without_helper_uses_local_chord() {
+  Deck d;
+  uint32_t t = 0;
+  hold(d, DECK_ENC2_SW, t);
+  ActionList r = hold(d, 0, t);
+  TEST_ASSERT_TRUE(has(r, ActionType::MicMute));
+  TEST_ASSERT_TRUE(d.micMuted());
+}
+
+void test_deck_knob2_turn_not_held_still_skips_tracks() {
+  Deck d;
+  d.setHelperPresent(true);
+  ActionList a;
+  d.onEncoders(0, 1, 0, a);
+  TEST_ASSERT_EQUAL_UINT8((uint8_t)ConsumerCode::NextTrack, a.items[0].value);
+}
+
+void test_deck_knob1_turn_while_knob2_held_is_volume() {
+  Deck d;
+  d.setHelperPresent(true);
+  uint32_t t = 0;
+  pressKnob2(d, t);
+  t += Deck::kMicTurnAfterMs;
+  ActionList a;
+  d.onEncoders(1, 0, t, a);
+  TEST_ASSERT_EQUAL_UINT8((uint8_t)ConsumerCode::VolumeUp, a.items[0].value);
+  ActionList r = hold(d, 0, t);
+  TEST_ASSERT_TRUE(has(r, ActionType::HelperMicMute));  // knob 2 itself was not turned
+}
+
 int main(int, char **) {
   UNITY_BEGIN();
   RUN_TEST(test_deck_key_press_and_release);
@@ -300,5 +381,11 @@ int main(int, char **) {
   RUN_TEST(test_deck_app_key_with_helper_sends_helper_action_on_press_only);
   RUN_TEST(test_deck_app_key_without_helper_reports_missing);
   RUN_TEST(test_deck_wifi_chord_emits_toggle_once);
+  RUN_TEST(test_deck_knob2_push_turn_with_helper_sends_mic_steps);
+  RUN_TEST(test_deck_knob2_turn_in_first_150ms_ignored_and_still_mutes);
+  RUN_TEST(test_deck_knob2_push_turn_without_helper_reports_missing_once);
+  RUN_TEST(test_deck_knob2_mute_without_helper_uses_local_chord);
+  RUN_TEST(test_deck_knob2_turn_not_held_still_skips_tracks);
+  RUN_TEST(test_deck_knob1_turn_while_knob2_held_is_volume);
   return UNITY_END();
 }
