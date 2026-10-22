@@ -18,3 +18,9 @@ After reflash + 5 s hold, screen said "saucedeck.local" but Mac: ping 10.0.0.88 
 /24 ping sweep found no deck MAC (28:84:85:69:2a:0c) beyond a stale ARP entry, no mDNS answer.
 -> banner showed a stale "joined" state. Fixed in a1aab3c (live WiFi.status, IP/RSSI banner).
 Pending: operator reads the new banner.
+New banner (a1aab3c): "10.0.0.8 -76dBm" -> deck really joined (DHCP gave .8, the .88 seen before was stale).
+Operator's device: page reachable ("I can see it") -> deck Wi-Fi + web portal PASS.
+This Mac (en0 Ethernet 10.0.0.74 + en1 Wi-Fi 10.0.0.109, 5 GHz): ping 0/3, HTTP timeout on both
+interfaces, ARP for .8 "(incomplete)" -> deck never answers the Mac at L2. Earlier .88 session did
+answer over en1. Likely AP client/band isolation between 5 GHz and 2.4 GHz clients [unverified].
+RSSI -76 dBm at 11 dBm TX: usable, weak; watch for drops.
