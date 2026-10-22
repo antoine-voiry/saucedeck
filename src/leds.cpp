@@ -30,3 +30,4 @@ void ledsUpdate(const LedInputs &in, uint32_t nowMs) {
 }
 
 void ledsSetDim(uint8_t level) { effects.setDim(level); }
+void ledsSetWifi(bool on) { effects.setWifi(on); }

@@ -50,7 +50,8 @@ static void drawSpeaker(bool muted) {
   }
 }
 
-static void drawMic(bool muted) {
+static void drawMic(const ScreenState &st) {
+  const bool muted = st.micMuted;
   const int16_t x = kMicX, y = kMicY;
   const uint16_t c = muted ? kRed : kGreen;
   tft.fillRect(x, y, 64, 64, kBg);
@@ -65,7 +66,13 @@ static void drawMic(bool muted) {
   tft.setTextSize(3);
   tft.setTextColor(c, kBg);
   tft.setCursor(kMicTextX, kMicTextY);
-  tft.print(muted ? "MUTED" : " LIVE");
+  if (muted || !st.micLevelKnown) {
+    tft.print(muted ? "MUTED" : " LIVE");
+  } else {
+    char buf[8];
+    snprintf(buf, sizeof buf, " %3u%%", st.micPercent);  // 5 chars: overwrites "MUTED"
+    tft.print(buf);
+  }
 }
 
 static void drawPercent(uint8_t pct) {
@@ -121,6 +128,33 @@ void displayBegin() {
   splashUntil = millis() + kSplashMs;
 }
 
+static char apPassword[9] = "";
+void displaySetApPassword(const char *p) { snprintf(apPassword, sizeof apPassword, "%s", p); }
+
+// Status line under the mic area (x >= 80 clears the volume bar).
+static void drawBanner(uint8_t b, uint8_t arg) {
+  tft.fillRect(80, 222, 240, 18, kBg);
+  if (b == BANNER_NONE) return;
+  char text[40];
+  switch (b) {
+    case BANNER_WIFI_COUNTDOWN: snprintf(text, sizeof text, "Wi-Fi in %us", arg); break;
+    case BANNER_WIFI_STARTING: snprintf(text, sizeof text, "Wi-Fi..."); break;
+    case BANNER_WIFI_PORTAL: snprintf(text, sizeof text, "SETUP %s", apPassword); break;
+    case BANNER_WIFI_JOINED: snprintf(text, sizeof text, "saucedeck.local"); break;
+    case BANNER_APPLY: snprintf(text, sizeof text, "Apply? knob1 %us", arg); break;
+    case BANNER_HELPER_MISSING: snprintf(text, sizeof text, "helper not running"); break;
+    case BANNER_KEYMAP_RESET: snprintf(text, sizeof text, "Key map reset"); break;
+    case BANNER_WIFI_FAILED: snprintf(text, sizeof text, "Wi-Fi failed"); break;
+    case BANNER_INVALID_KEY: snprintf(text, sizeof text, "Invalid key %u", arg); break;
+    case BANNER_BROWNOUT: snprintf(text, sizeof text, "Reset: brownout"); break;
+    default: text[0] = 0; break;
+  }
+  tft.setTextSize(2);
+  tft.setTextColor(b == BANNER_APPLY ? ST77XX_YELLOW : kFg, kBg);
+  tft.setCursor(80, 223);
+  tft.print(text);
+}
+
 void displayUpdate(const ScreenState &state, uint32_t nowMs) {
   if (splashing) {
     if (static_cast<int32_t>(nowMs - splashUntil) < 0) return;
@@ -138,7 +172,8 @@ void displayUpdate(const ScreenState &state, uint32_t nowMs) {
   else if (dirty & DIRTY_BAR) drawBarDelta(model.previous(), cur);
   if (dirty & DIRTY_VOLUME_TEXT) drawPercent(cur.volumePercent);
   if (dirty & DIRTY_SPEAKER_ICON) drawSpeaker(cur.speakerMuted);
-  if (dirty & DIRTY_MIC) drawMic(cur.micMuted);
+  if (dirty & DIRTY_MIC) drawMic(cur);
+  if (dirty & DIRTY_BANNER) drawBanner(cur.banner, cur.bannerArg);
 }
 
 static bool panelAsleep = false;
