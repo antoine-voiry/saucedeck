@@ -39,6 +39,7 @@ static bool keymapResetNotice = false;  // blob present but corrupt -> defaults 
 static bool brownoutNotice = false;     // last reset was a brownout (banner)
 static uint32_t helperMissingUntil = 0;
 static WifiSession wifi;
+static uint8_t wifiInfoTick = 0;  // forces a banner redraw when the info text changes
 static uint8_t invalidKey = 0;
 static uint32_t invalidUntil = 0, wifiFailedUntil = 0;  // "helper not running" banner end
 static IdleDimmer dimmer;  // LEDs + LCD fade after 120 s idle, off at 240 s
@@ -152,8 +153,18 @@ void loop() {
   now = millis();
   portalPoll();
   if (wifi.on()) {
-    if (portalState() == WifiState::Joined) wifi.onJoined();
-    else if (portalState() == WifiState::Portal) wifi.onPortal();
+    WifiState ps = portalState();
+    if (ps == WifiState::Joined) wifi.onJoined();
+    else if (ps == WifiState::Portal) wifi.onPortal();
+    else if (ps == WifiState::Starting) wifi.onLost();
+    static uint32_t lastInfo = 0;
+    if (now - lastInfo >= 1000) {  // IP / RSSI / status for the banner, once a second
+      lastInfo = now;
+      char info[28];
+      portalInfo(info, sizeof info);
+      displaySetWifiInfo(info);
+      wifiInfoTick++;
+    }
   }
   if (wifi.tick(now)) {  // 10 min auto-off
     portalStop();
@@ -204,8 +215,10 @@ void loop() {
     banner = BANNER_WIFI_PORTAL;
   } else if (wifi.state() == WifiState::Joined) {
     banner = BANNER_WIFI_JOINED;
+    arg = wifiInfoTick;
   } else if (wifi.state() == WifiState::Starting) {
     banner = BANNER_WIFI_STARTING;
+    arg = wifiInfoTick;
   } else if (keymapResetNotice && now < 5000) {
     banner = BANNER_KEYMAP_RESET;
   } else if (brownoutNotice && now < 8000) {

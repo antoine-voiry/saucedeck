@@ -129,6 +129,8 @@ void displayBegin() {
 }
 
 static char apPassword[9] = "";
+static char wifiInfo[28] = "";
+void displaySetWifiInfo(const char *info) { snprintf(wifiInfo, sizeof wifiInfo, "%s", info); }
 void displaySetApPassword(const char *p) { snprintf(apPassword, sizeof apPassword, "%s", p); }
 
 // Status line under the mic area (x >= 80 clears the volume bar).
@@ -138,9 +140,9 @@ static void drawBanner(uint8_t b, uint8_t arg) {
   char text[40];
   switch (b) {
     case BANNER_WIFI_COUNTDOWN: snprintf(text, sizeof text, "Wi-Fi in %us", arg); break;
-    case BANNER_WIFI_STARTING: snprintf(text, sizeof text, "Wi-Fi..."); break;
+    case BANNER_WIFI_STARTING: snprintf(text, sizeof text, "Wi-Fi.. %s", wifiInfo); break;
     case BANNER_WIFI_PORTAL: snprintf(text, sizeof text, "SETUP %s", apPassword); break;
-    case BANNER_WIFI_JOINED: snprintf(text, sizeof text, "saucedeck.local"); break;
+    case BANNER_WIFI_JOINED: snprintf(text, sizeof text, "%s", wifiInfo); break;  // IP + RSSI
     case BANNER_APPLY: snprintf(text, sizeof text, "Apply? knob1 %us", arg); break;
     case BANNER_HELPER_MISSING: snprintf(text, sizeof text, "helper not running"); break;
     case BANNER_KEYMAP_RESET: snprintf(text, sizeof text, "Key map reset"); break;

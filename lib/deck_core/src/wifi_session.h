@@ -24,6 +24,9 @@ class WifiSession {
     if (state_ == WifiState::Starting || state_ == WifiState::Portal) state_ = WifiState::Joined;
   }
   void onFailed() { state_ = WifiState::Off; }
+  void onLost() {  // joined link dropped: back to (re)connecting, Wi-Fi stays on
+    if (state_ == WifiState::Joined) state_ = WifiState::Starting;
+  }
 
   bool tick(uint32_t nowMs) {
     if (state_ != WifiState::Off && nowMs - since_ >= kOnMs) {
