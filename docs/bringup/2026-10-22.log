@@ -9,3 +9,12 @@ Operator: two-knob 5 s hold -> deck joined home Wi-Fi (saved credentials).
 Mac: dns-sd saucedeck.local -> 10.0.0.88. curl http://saucedeck.local/param -> HTTP 200, 6072 B,
 24 fields t1..t12 / v1..v12 pre-filled with current map (key/f13..). -> custom params in STA web
 portal + mDNS: PASS.
+
+== LED key feedback (2953ba0) ==
+Operator: keys work with the new pattern (key N -> N LEDs, rainbow). PASS (Wi-Fi off).
+
+== Wi-Fi reachability ==
+After reflash + 5 s hold, screen said "saucedeck.local" but Mac: ping 10.0.0.88 0/3, HTTP 000,
+/24 ping sweep found no deck MAC (28:84:85:69:2a:0c) beyond a stale ARP entry, no mDNS answer.
+-> banner showed a stale "joined" state. Fixed in a1aab3c (live WiFi.status, IP/RSSI banner).
+Pending: operator reads the new banner.
