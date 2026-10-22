@@ -10,6 +10,7 @@
 #include "mcp_io.h"
 #include "encoders.h"
 #include "idle_dimmer.h"
+#include "helper_link.h"
 #include "keymap_store.h"
 #include <esp_system.h>
 
@@ -35,6 +36,7 @@ static Deck deck(16);  // macOS: 16 VOL+/- steps full range (unverified)
 static bool mcpOk = false;
 static bool keymapResetNotice = false;  // blob present but corrupt -> defaults (banner)
 static bool brownoutNotice = false;     // last reset was a brownout (banner)
+static uint32_t helperMissingUntil = 0;  // "helper not running" banner end
 static IdleDimmer dimmer;  // LEDs + LCD fade after 120 s idle, off at 240 s
 
 static void run(const ActionList &actions) {
@@ -65,11 +67,11 @@ static void run(const ActionList &actions) {
         Consumer.release();
         break;
       case ActionType::Sync: break;  // local only, no HID report
-      case ActionType::HelperAction:
-      case ActionType::HelperMissing:
-      case ActionType::HelperMicMute:
-      case ActionType::MicUp:
-      case ActionType::MicDown:
+      case ActionType::HelperAction: helperSendAction(a.value, deck.keyMap().entry(a.value)); break;
+      case ActionType::HelperMicMute: helperSendMicMute(); break;
+      case ActionType::MicUp: helperSendMicDelta(1); break;
+      case ActionType::MicDown: helperSendMicDelta(-1); break;
+      case ActionType::HelperMissing: helperMissingUntil = millis() + 2000; break;
       case ActionType::WifiToggle:
       case ActionType::KeyMapDiscarded: break;  // wired in later tasks
       case ActionType::KeyMapCommitted: keymapSave(deck.keyMap()); break;
@@ -99,6 +101,7 @@ void setup() {
   Consumer.begin();
   USB.begin();
   Serial.begin(115200);
+  helperBegin();
 
   KeyMap stored;
   bool hadMap = keymapExists();
@@ -116,6 +119,11 @@ void setup() {
 }
 
 void loop() {
+  uint32_t now = millis();
+  helperPoll(now);
+  const HostLink &hl = helperLink();
+  deck.setHelperPresent(hl.present(now));
+
   ActionList actions;
   scanButtons(actions);
   // Knob 1 -> volume, knob 2 -> next/previous track
@@ -125,13 +133,22 @@ void loop() {
   run(actions);
 
   // Any input (still acted on above) or an on-screen prompt keeps the deck awake
-  uint32_t now = millis();
+  now = millis();
   if (actions.count || d1 || d2 || deck.pending() || deck.chordHeldMs(now) > 0) dimmer.onActivity(now);
   uint8_t dim = dimmer.level(now);
   ledsSetDim(dim);
   displaySetDim(dim);
 
+  // Helper connected: show the Mac's real volume / mic; otherwise the deck's own count
   const VolumeState &spk = deck.speaker();
-  displayUpdate({spk.percent(), spk.muted(), deck.micMuted(), false, 0, BANNER_NONE, 0}, millis());
-  ledsUpdate({spk.percent(), spk.muted(), deck.micMuted()}, millis());
+  bool live = hl.present(now) && hl.hasVolume();
+  uint8_t pct = live ? hl.volumePercent() : spk.percent();
+  bool spkMuted = live ? hl.volumeMuted() : spk.muted();
+  bool micKnown = hl.present(now) && hl.hasMic();
+  bool micMuted = micKnown ? hl.micMuted() : deck.micMuted();
+  uint8_t micPct = micKnown ? hl.micPercent() : 0;
+  uint8_t banner = BANNER_NONE;
+  if (static_cast<int32_t>(helperMissingUntil - now) > 0) banner = BANNER_HELPER_MISSING;
+  displayUpdate({pct, spkMuted, micMuted, micKnown, micPct, banner, 0}, now);
+  ledsUpdate({pct, spkMuted, micMuted}, now);
 }
