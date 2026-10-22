@@ -31,8 +31,8 @@ jobs:
         run: pio check -e native --fail-on-defect=medium --skip-packages
       - name: Firmware builds
         run: pio run -e saucedeck -e bringup
-      - name: No Wi-Fi/BT linked
-        run: tools/check_no_radio.sh .pio/build/saucedeck/firmware.elf
+      - name: Radio scope (no BT, Wi-Fi only in wifi_portal.cpp)
+        run: tools/check_radio_scope.sh .pio/build/saucedeck
 
   secrets:
     runs-on: ubuntu-latest
