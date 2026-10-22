@@ -160,17 +160,27 @@ void test_millis_wrap_flash_still_fades() {
   TEST_ASSERT_TRUE(allEqual(px, N, idle[0]));
 }
 
-void test_wifi_mode_caps_and_shows_only_indicator() {
+void test_wifi_mode_caps_power_and_keeps_indicator() {
   LedEffects e;
   e.setWifi(true);
-  e.onAction({ActionType::KeyDown, 0}, 0);  // flash suppressed in Wi-Fi mode
   Rgb px[N];
   for (uint32_t t = 0; t < 2000; t += 50) {
     e.render(kIdle, t, px, N);
     TEST_ASSERT_TRUE(estimateMilliamps(px, N) <= LedEffects::kWifiBudgetMa);
-    for (size_t i = 1; i < N; i++) TEST_ASSERT_TRUE(isOff(px[i]));
+    for (size_t i = 1; i < N; i++) TEST_ASSERT_TRUE(isOff(px[i]));  // idle: indicator only
     TEST_ASSERT_EQUAL_UINT8(0, px[0].r);
   }
+}
+
+void test_wifi_mode_key_press_still_shows_count_capped() {
+  LedEffects e;
+  e.setWifi(true);
+  e.onAction({ActionType::KeyDown, 4}, 0);  // key 5
+  Rgb px[N];
+  e.render(kIdle, 0, px, N);
+  TEST_ASSERT_TRUE(estimateMilliamps(px, N) <= LedEffects::kWifiBudgetMa);
+  for (size_t i = 1; i < 5; i++) TEST_ASSERT_FALSE(isOff(px[i]));
+  for (size_t i = 5; i < N; i++) TEST_ASSERT_TRUE(isOff(px[i]));
 }
 
 void test_wifi_indicator_pulses() {
@@ -203,6 +213,57 @@ void test_dim_scales_frame_and_zero_is_off() {
   for (size_t i = 0; i < N; i++) TEST_ASSERT_TRUE(isOff(off[i]));
 }
 
+// --- key N lights N LEDs, rainbow (owner request 2026-10-22) ---
+
+static bool brighterThan(Rgb a, Rgb b) { return a.r + a.g + a.b > b.r + b.g + b.b; }
+
+void test_key_n_lights_first_n_leds() {
+  LedEffects e;
+  Rgb idle[N], px[N];
+  e.render(kIdle, 0, idle, N);
+  e.onAction({ActionType::KeyDown, 2}, 1000);  // key 3
+  e.render(kIdle, 1000, px, N);
+  for (size_t i = 0; i < 3; i++) TEST_ASSERT_TRUE(brighterThan(px[i], idle[i]));
+  for (size_t i = 3; i < N; i++) TEST_ASSERT_TRUE(allEqual(&px[i], 1, idle[i]));
+}
+
+void test_key_12_lights_12_leds() {
+  LedEffects e;
+  Rgb idle[N], px[N];
+  e.render(kIdle, 0, idle, N);
+  e.onAction({ActionType::KeyDown, 11}, 1000);
+  e.render(kIdle, 1000, px, N);
+  TEST_ASSERT_TRUE(brighterThan(px[11], idle[11]));
+  // 12 lit LEDs exceed the 250 mA cap, so the limiter scales the whole frame: LED 13 is not lit
+  // (at most idle brightness), not necessarily equal to idle.
+  TEST_ASSERT_FALSE(brighterThan(px[12], idle[12]));
+}
+
+void test_key_leds_are_rainbow_not_one_colour() {
+  LedEffects e;
+  Rgb px[N];
+  e.onAction({ActionType::KeyDown, 5}, 0);  // 6 LEDs
+  e.render(kIdle, 0, px, N);
+  TEST_ASSERT_FALSE(px[0].r == px[5].r && px[0].g == px[5].g && px[0].b == px[5].b);
+}
+
+void test_helper_action_uses_same_count_pattern() {
+  LedEffects e;
+  Rgb idle[N], px[N];
+  e.render(kIdle, 0, idle, N);
+  e.onAction({ActionType::HelperAction, 1}, 1000);  // key 2
+  e.render(kIdle, 1000, px, N);
+  TEST_ASSERT_TRUE(brighterThan(px[1], idle[1]));
+  TEST_ASSERT_TRUE(allEqual(&px[2], 1, idle[2]));
+}
+
+void test_hsv_primaries() {
+  Rgb r = hsvToRgb(0, 255), g = hsvToRgb(120, 255), b = hsvToRgb(240, 255);
+  TEST_ASSERT_TRUE(r.r == 255 && r.g == 0 && r.b == 0);
+  TEST_ASSERT_TRUE(g.g == 255 && g.r == 0 && g.b == 0);
+  TEST_ASSERT_TRUE(b.b == 255 && b.r == 0 && b.g == 0);
+}
+
 int main(int, char **) {
   UNITY_BEGIN();
   RUN_TEST(test_power_estimate_full_white);
@@ -221,9 +282,15 @@ int main(int, char **) {
   RUN_TEST(test_volume_gauge_times_out);
   RUN_TEST(test_render_respects_power_budget);
   RUN_TEST(test_millis_wrap_flash_still_fades);
-  RUN_TEST(test_wifi_mode_caps_and_shows_only_indicator);
+  RUN_TEST(test_wifi_mode_caps_power_and_keeps_indicator);
+  RUN_TEST(test_wifi_mode_key_press_still_shows_count_capped);
   RUN_TEST(test_wifi_indicator_pulses);
   RUN_TEST(test_helper_missing_flashes_orange);
   RUN_TEST(test_dim_scales_frame_and_zero_is_off);
+  RUN_TEST(test_key_n_lights_first_n_leds);
+  RUN_TEST(test_key_12_lights_12_leds);
+  RUN_TEST(test_key_leds_are_rainbow_not_one_colour);
+  RUN_TEST(test_helper_action_uses_same_count_pattern);
+  RUN_TEST(test_hsv_primaries);
   return UNITY_END();
 }
