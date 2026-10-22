@@ -111,7 +111,7 @@ cache `~/.platformio`, warnings treated as failures on `deck_core`. Written, not
 | --- | --- | --- |
 | Supply chain: platform | `stable` URL = moving target | Done 2026-10-18: pinned to 55.03.35 (installed, bench-verified build) |
 | Supply chain: libs | Adafruit GFX/BusIO/ST7789/seesaw/NeoPixel | Done: exact versions in `lib_deps`. SD (transitive, unlinked) can't be pinned, see kb |
-| Attack surface: radios | Wi-Fi/BT unused | Done 2026-10-19: `tools/check_no_radio.sh` (nm on ELF) in CI; 0 radio init symbols today |
+| Attack surface: radios | Wi-Fi/BT unused | Changed 2026-10-22: Wi-Fi portal by design (spec 2026-10-20); CI `tools/check_radio_scope.sh` (no BT, Wi-Fi only from `wifi_portal.cpp`) |
 | Attack surface: USB | HID keyboard + CDC serial | Production CDC: no command interpreter, no debug shell. Bench commands stay in `bringup` env only |
 | HID injection | Device types keys on host | Only fixed F13–F24 / consumer / one mute chord. No typed strings, no runtime-configurable macros without auth |
 | Secrets | none | Done: gitleaks pre-commit + CI |
