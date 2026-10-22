@@ -2,6 +2,7 @@
 #include <string.h>
 #include "helper_proto.h"
 #include "host_link.h"
+#include "frame.h"
 
 void setUp() {}
 void tearDown() {}
@@ -151,6 +152,90 @@ void test_link_millis_wrap() {
   TEST_ASSERT_TRUE(l.present(0x00000100u));  // 512 ms later across wrap
 }
 
+// --- serial framing (USB CDC transport, spike B outcome) ---
+
+static size_t feed(FrameReader &r, const uint8_t *b, size_t n, uint8_t *msg) {
+  size_t got = 0;
+  for (size_t i = 0; i < n; i++) got += r.push(b[i], msg) ? 1 : 0;
+  return got;
+}
+
+void test_crc16_check_value() {
+  const uint8_t s[] = {'1', '2', '3', '4', '5', '6', '7', '8', '9'};
+  TEST_ASSERT_EQUAL_HEX16(0x29B1, crc16ccitt(s, sizeof s));  // CRC-16/CCITT-FALSE
+}
+
+void test_frame_roundtrip() {
+  uint8_t m[kReportSize], f[kFrameSize], out[kReportSize];
+  encodeMicMute(m, sizeof m);
+  frameMessage(m, f);
+  TEST_ASSERT_EQUAL_HEX8(0xA5, f[0]);
+  TEST_ASSERT_EQUAL_HEX8(0x5A, f[1]);
+  FrameReader r;
+  TEST_ASSERT_EQUAL(1, feed(r, f, sizeof f, out));
+  TEST_ASSERT_EQUAL_MEMORY(m, out, kReportSize);
+}
+
+void test_frame_skips_text_and_junk_before_frame() {
+  uint8_t m[kReportSize], f[kFrameSize], out[kReportSize];
+  encodeMicDelta(3, m, sizeof m);
+  frameMessage(m, f);
+  const uint8_t junk[] = {'P', 'C', 'N', 'T', ' ', 'f', 'a', 'i', 'l', '\n', 0xA5, 0x00, 0xA5};
+  FrameReader r;
+  TEST_ASSERT_EQUAL(0, feed(r, junk, sizeof junk, out));
+  TEST_ASSERT_EQUAL(1, feed(r, f, sizeof f, out));
+  TEST_ASSERT_EQUAL_MEMORY(m, out, kReportSize);
+}
+
+void test_frame_bad_crc_dropped_then_next_frame_ok() {
+  uint8_t m[kReportSize], f[kFrameSize], bad[kFrameSize], out[kReportSize];
+  encodeMicMute(m, sizeof m);
+  frameMessage(m, f);
+  memcpy(bad, f, sizeof f);
+  bad[10] ^= 0x40;
+  FrameReader r;
+  TEST_ASSERT_EQUAL(0, feed(r, bad, sizeof bad, out));
+  TEST_ASSERT_EQUAL(1, feed(r, f, sizeof f, out));
+  TEST_ASSERT_EQUAL_MEMORY(m, out, kReportSize);
+}
+
+void test_frame_fake_sync_in_corrupt_frame_does_not_swallow_next() {
+  uint8_t m[kReportSize], f[kFrameSize], bad[kFrameSize], out[kReportSize];
+  encodeMicDelta(-1, m, sizeof m);
+  frameMessage(m, f);
+  memcpy(bad, f, sizeof f);
+  bad[20] = 0xA5;
+  bad[21] = 0x5A;  // fake sync inside, CRC now wrong
+  FrameReader r;
+  size_t got = feed(r, bad, sizeof bad, out) + feed(r, f, sizeof f, out);
+  TEST_ASSERT_EQUAL(1, got);
+  TEST_ASSERT_EQUAL_MEMORY(m, out, kReportSize);
+}
+
+void test_frame_random_bytes_emit_nothing() {
+  uint32_t x = 777;
+  uint8_t out[kReportSize];
+  FrameReader r;
+  size_t got = 0;
+  for (int i = 0; i < 200000; i++) {
+    x = x * 1103515245u + 12345u;
+    got += r.push(static_cast<uint8_t>(x >> 16), out) ? 1 : 0;
+  }
+  TEST_ASSERT_EQUAL(0, got);
+}
+
+void test_frame_back_to_back_frames() {
+  uint8_t m1[kReportSize], m2[kReportSize], f[2 * kFrameSize], out[kReportSize];
+  encodeMicMute(m1, sizeof m1);
+  encodeMicDelta(2, m2, sizeof m2);
+  frameMessage(m1, f);
+  frameMessage(m2, f + kFrameSize);
+  FrameReader r;
+  TEST_ASSERT_EQUAL(1, feed(r, f, kFrameSize, out));
+  TEST_ASSERT_EQUAL(1, feed(r, f + kFrameSize, kFrameSize, out));
+  TEST_ASSERT_EQUAL_MEMORY(m2, out, kReportSize);
+}
+
 int main(int, char **) {
   UNITY_BEGIN();
   RUN_TEST(test_decode_hello_volume_mic);
@@ -165,5 +250,12 @@ int main(int, char **) {
   RUN_TEST(test_link_stores_volume_and_mic);
   RUN_TEST(test_link_usb_reset_clears_everything);
   RUN_TEST(test_link_millis_wrap);
+  RUN_TEST(test_crc16_check_value);
+  RUN_TEST(test_frame_roundtrip);
+  RUN_TEST(test_frame_skips_text_and_junk_before_frame);
+  RUN_TEST(test_frame_bad_crc_dropped_then_next_frame_ok);
+  RUN_TEST(test_frame_fake_sync_in_corrupt_frame_does_not_swallow_next);
+  RUN_TEST(test_frame_random_bytes_emit_nothing);
+  RUN_TEST(test_frame_back_to_back_frames);
   return UNITY_END();
 }
