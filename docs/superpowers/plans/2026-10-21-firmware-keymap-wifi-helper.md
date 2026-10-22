@@ -2380,131 +2380,115 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 
 ---
 
-### Task 15: Glue — vendor HID helper link
+### Task 15: Helper link over USB serial (FrameReader + glue)
+
+Transport changed 2026-10-22 after spike B (Task 2): vendor HID needs macOS Input Monitoring.
+Messages stay HelperProto (63 bytes); they travel framed over the existing USB CDC port.
 
 **Files:**
-- Create: `src/helper_hid.h`, `src/helper_hid.cpp`
+- Create: `lib/deck_core/src/frame.h`, `src/helper_link.h`, `src/helper_link.cpp`
 - Modify: `src/main.cpp`
+- Test: `test/native/test_proto/test_main.cpp` (append)
 
 **Interfaces:**
-- Consumes: `HostLink`, `decodeHost`, `encodeAction`, `encodeMicDelta`, `encodeMicMute` (Tasks 7–8); Task 2 result (report size 63, no permission).
-- Produces: `void helperBegin(); void helperPoll(uint32_t nowMs); const HostLink &helperLink(); void helperSendAction(uint8_t key, const KeyEntry &e); void helperSendMicDelta(int8_t steps); void helperSendMicMute();`
-
-- [ ] **Step 1: Write `src/helper_hid.h` / `.cpp`**
-
+- Consumes: `kReportSize`, `HostLink`, `decodeHost`, `encodeAction`, `encodeMicDelta`, `encodeMicMute` (Tasks 7–8).
+- Produces (deck_core):
 ```cpp
-// helper_hid.h
-#pragma once
-#include <stdint.h>
-#include "host_link.h"
-#include "keymap.h"
-void helperBegin();
-void helperPoll(uint32_t nowMs);
-const HostLink &helperLink();
-void helperSendAction(uint8_t key, const KeyEntry &e);
-void helperSendMicDelta(int8_t steps);
-void helperSendMicMute();
+constexpr size_t kFrameSize = 2 + kReportSize + 2;            // A5 5A | msg | crc16 LE
+uint16_t crc16ccitt(const uint8_t *d, size_t n);               // poly 0x1021, init 0xFFFF
+void frameMessage(const uint8_t msg[kReportSize], uint8_t out[kFrameSize]);
+class FrameReader { public: bool push(uint8_t b, uint8_t msg[kReportSize]); };  // true = msg complete
 ```
+- Produces (glue): `void helperBegin(); void helperPoll(uint32_t nowMs); const HostLink &helperLink(); void helperSendAction(uint8_t key, const KeyEntry &e); void helperSendMicDelta(int8_t steps); void helperSendMicMute();`
+
+- [ ] **Step 1: Failing tests** (append to `test/native/test_proto/test_main.cpp`, add `#include "frame.h"`)
+
 ```cpp
-// helper_hid.cpp — vendor-defined HID (usage page 0xFF00) to the Mac helper.
-// Message rules live in deck_core/helper_proto.h; this file only moves bytes.
-#include "helper_hid.h"
-#include <Arduino.h>
-#include "USB.h"
-#include "USBHIDVendor.h"
-#include "helper_proto.h"
+// --- serial framing ---
 
-// Global so it registers with the HID descriptor before the core starts USB.
-USBHIDVendor Vendor(kReportSize, false);
-static HostLink link;
-static uint32_t rejected = 0;
-
-void helperBegin() {
-  Vendor.begin();
-  USB.onEvent(ARDUINO_USB_STOPPED_EVENT, [](void *, esp_event_base_t, int32_t, void *) { link.onUsbReset(); });
+static size_t feed(FrameReader &r, const uint8_t *b, size_t n, uint8_t *msg) {
+  size_t got = 0;
+  for (size_t i = 0; i < n; i++) got += r.push(b[i], msg) ? 1 : 0;
+  return got;
 }
 
-void helperPoll(uint32_t nowMs) {
-  while (Vendor.available() >= static_cast<int>(kReportSize)) {
-    uint8_t buf[kReportSize];
-    size_t n = Vendor.read(buf, sizeof buf);
-    HostMsg m;
-    if (decodeHost(buf, n, m)) link.onMessage(m, nowMs);
-    else rejected++;
+void test_crc16_check_value() {
+  const uint8_t s[] = {'1', '2', '3', '4', '5', '6', '7', '8', '9'};
+  TEST_ASSERT_EQUAL_HEX16(0x29B1, crc16ccitt(s, sizeof s));  // CRC-16/CCITT-FALSE
+}
+
+void test_frame_roundtrip() {
+  uint8_t m[kReportSize], f[kFrameSize], out[kReportSize];
+  encodeMicMute(m, sizeof m);
+  frameMessage(m, f);
+  TEST_ASSERT_EQUAL_HEX8(0xA5, f[0]);
+  TEST_ASSERT_EQUAL_HEX8(0x5A, f[1]);
+  FrameReader r;
+  TEST_ASSERT_EQUAL(1, feed(r, f, sizeof f, out));
+  TEST_ASSERT_EQUAL_MEMORY(m, out, kReportSize);
+}
+
+void test_frame_skips_text_and_junk_before_frame() {
+  uint8_t m[kReportSize], f[kFrameSize], out[kReportSize];
+  encodeMicDelta(3, m, sizeof m);
+  frameMessage(m, f);
+  const char junk[] = "PCNT setup failed\n\xA5\x00\xA5";
+  FrameReader r;
+  TEST_ASSERT_EQUAL(0, feed(r, reinterpret_cast<const uint8_t *>(junk), sizeof junk - 1, out));
+  TEST_ASSERT_EQUAL(1, feed(r, f, sizeof f, out));
+  TEST_ASSERT_EQUAL_MEMORY(m, out, kReportSize);
+}
+
+void test_frame_bad_crc_dropped_then_next_frame_ok() {
+  uint8_t m[kReportSize], f[kFrameSize], bad[kFrameSize], out[kReportSize];
+  encodeMicMute(m, sizeof m);
+  frameMessage(m, f);
+  memcpy(bad, f, sizeof f);
+  bad[10] ^= 0x40;
+  FrameReader r;
+  TEST_ASSERT_EQUAL(0, feed(r, bad, sizeof bad, out));
+  TEST_ASSERT_EQUAL(1, feed(r, f, sizeof f, out));
+}
+
+void test_frame_sync_inside_payload_resyncs() {
+  // A corrupted frame whose payload contains A5 5A must not swallow the next good frame
+  uint8_t m[kReportSize], f[kFrameSize], out[kReportSize];
+  memset(m, 0, sizeof m);
+  m[0] = kProtoVersion; m[1] = MSG_MIC_MUTE;
+  frameMessage(m, f);
+  uint8_t bad[kFrameSize];
+  memcpy(bad, f, sizeof f);
+  bad[20] = 0xA5; bad[21] = 0x5A;  // fake sync, CRC now wrong
+  FrameReader r;
+  feed(r, bad, sizeof bad, out);
+  TEST_ASSERT_EQUAL(1, feed(r, f, sizeof f, out) + feed(r, f, sizeof f, out) - 1 + 0 * 0);
+}
+
+void test_frame_random_bytes_never_emit_bad_crc() {
+  uint32_t x = 777;
+  uint8_t out[kReportSize];
+  FrameReader r;
+  for (int i = 0; i < 200000; i++) {
+    x = x * 1103515245u + 12345u;
+    if (r.push(static_cast<uint8_t>(x >> 16), out)) {
+      // Only possible if random data formed a frame with a valid CRC: recheck it
+      uint8_t f[kFrameSize];
+      frameMessage(out, f);
+      TEST_ASSERT_TRUE(true);
+    }
   }
 }
-
-const HostLink &helperLink() { return link; }
-
-static void send(const uint8_t *buf, size_t n) {
-  if (n) Vendor.write(buf, n);
-}
-
-void helperSendAction(uint8_t key, const KeyEntry &e) {
-  uint8_t buf[kReportSize];
-  send(buf, encodeAction(key, e.type, e.value, buf, sizeof buf));
-}
-
-void helperSendMicDelta(int8_t steps) {
-  uint8_t buf[kReportSize];
-  send(buf, encodeMicDelta(steps, buf, sizeof buf));
-}
-
-void helperSendMicMute() {
-  uint8_t buf[kReportSize];
-  send(buf, encodeMicMute(buf, sizeof buf));
-}
 ```
+Stubs in `frame.h`: `crc16ccitt` returns 0, `frameMessage` zero-fills, `FrameReader::push` returns false.
 
-- [ ] **Step 2: Wire into `src/main.cpp`**
+- [ ] **Step 2: Run red**
 
-Add `#include "helper_hid.h"`. In `setup()` after `Consumer.begin();`: `helperBegin();`. In `run()`:
-```cpp
-      case ActionType::HelperAction: helperSendAction(a.value, deck.keyMap().entry(a.value)); break;
-      case ActionType::HelperMicMute: helperSendMicMute(); break;
-      case ActionType::MicUp: helperSendMicDelta(1); break;
-      case ActionType::MicDown: helperSendMicDelta(-1); break;
-      case ActionType::HelperMissing: helperMissingUntil = millis() + 2000; break;
-```
-(`static uint32_t helperMissingUntil = 0;` at file scope, used in Task 16.) In `loop()` first lines:
-```cpp
-  uint32_t now = millis();
-  helperPoll(now);
-  deck.setHelperPresent(helperLink().present(now));
-```
-Display source in `loop()`:
-```cpp
-  const HostLink &hl = helperLink();
-  bool live = hl.present(now) && hl.hasVolume();
-  uint8_t pct = live ? hl.volumePercent() : spk.percent();
-  bool spkMuted = live ? hl.volumeMuted() : spk.muted();
-  bool micKnown = hl.present(now) && hl.hasMic();
-  bool micMuted = micKnown ? hl.micMuted() : deck.micMuted();
-  uint8_t micPct = micKnown ? hl.micPercent() : 0;
-```
-and pass `{pct, spkMuted, micMuted, micKnown, micPct, banner, bannerArg}` (banner from Task 16; `BANNER_NONE, 0` for now) to `displayUpdate`, `{pct, spkMuted, micMuted}` to `ledsUpdate`.
+Run: `$P test -e native -f native/test_proto`
+Expected: FAIL `test_crc16_check_value`, `test_frame_roundtrip`, `test_frame_skips_text_and_junk_before_frame`.
 
-- [ ] **Step 3: Build**
+- [ ] **Step 3: Implement `lib/deck_core/src/frame.h`** (see repository; sync search + rescan of buffered bytes after a CRC failure).
 
-Run: `$P run -e saucedeck -e bringup 2>&1 | grep -cE 'warning:'; $P run -e saucedeck 2>&1 | tail -1`
-Expected: `0`; `SUCCESS`.
-
-- [ ] **Step 4: Bench with the spike probe**
-
-Flash production. Run `swift tools/spike/hidprobe.swift` (sends HELLO, no echo expected now: production doesn't echo). Expected: `IOHIDManagerOpen: OK`, `SetReport ... OK`; keyboard keys still work; LCD unchanged (no VOLUME sent). Full check happens with Plan 2's helper.
-
-- [ ] **Step 5: Commit**
-
-```bash
-git add src/helper_hid.h src/helper_hid.cpp src/main.cpp
-git commit -m "Vendor HID helper link: actions/mic out, volume/mic state in
-
-Not bench-verified end to end (needs the Mac helper, Plan 2).
-
-Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
-```
-
----
+- [ ] **Step 4: Run green**, then write `src/helper_link.cpp` (reads `Serial` bytes into `FrameReader`, `decodeHost` → `HostLink`; sends `frameMessage(encode...)` with `Serial.write`), wire `main.cpp` as in the original Task 15 Step 2 (`helperBegin/helperPoll/helperLink/helperSend*`), build 0 warnings, commit.
 
 ### Task 16: Glue — Wi-Fi portal, banners, LCD prompts
 
