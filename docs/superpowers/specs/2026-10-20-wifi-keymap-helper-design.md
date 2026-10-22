@@ -49,9 +49,8 @@ Non-goals: Windows, OTA firmware updates, page login, encrypted storage, cloud a
         └── phone / laptop browser → WiFiManager page
 ```
 
-USB composite device: keyboard + consumer control (existing) + one vendor-defined HID
-interface (usage page 0xFF00, 64-byte in/out reports) for the helper. Browsers and the
-helper never use the keyboard interface for data.
+USB composite device: keyboard + consumer control (existing) + CDC serial (existing). The helper
+talks over CDC serial with framed messages (see 4.6); no vendor HID interface.
 
 ## 4. Components (deck_core, all unit-tested)
 
@@ -89,7 +88,13 @@ helper never use the keyboard interface for data.
 - Knob 1 press in the window → commit to NVS and make it live. While pending, knob 1 = confirm (not mute).
 - Timeout, or a new save → previous staged map discarded.
 
-### 4.6 HelperProto (vendor HID messages, 64-byte reports)
+### 4.6 HelperProto (messages) + transport
+**Transport changed 2026-10-22 (spike B):** vendor HID shares the keyboard HID interface, so macOS
+requires Input Monitoring to open it. Owner chose the existing **USB CDC serial port** instead:
+frames `A5 5A | 63-byte message | CRC16-CCITT (LE)`, read by `FrameReader` (resyncs on junk).
+Helper opens the port at 115200 (never 1200 = bootloader touch) and must release it for flashing.
+
+Messages (unchanged, 63 bytes):
 Header: `ver (1) | type | len`, payload ≤ 60 bytes (63-byte reports, Arduino `USBHIDVendor` default). Parser rejects bad version, unknown type,
 `len` > 61, out-of-range values. Fuzz-style tests on random input.
 
