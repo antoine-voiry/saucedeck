@@ -53,6 +53,6 @@ class FrameReader {
     len_--;
   }
 
-  uint8_t buf_[kFrameSize];
+  uint8_t buf_[kFrameSize] = {};
   size_t len_ = 0;
 };

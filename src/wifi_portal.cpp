@@ -32,10 +32,10 @@ static void buildParams(const KeyMap &m) {
       params[2 * i + 1]->setValue(valueBuf[i], kKeyValueMax);
       continue;
     }
-    snprintf(ids[2 * i], sizeof ids[0], "t%u", i + 1);
-    snprintf(ids[2 * i + 1], sizeof ids[0], "v%u", i + 1);
-    snprintf(labels[2 * i], sizeof labels[0], "Key %u type", i + 1);
-    snprintf(labels[2 * i + 1], sizeof labels[0], "Key %u value", i + 1);
+    snprintf(ids[2 * i], sizeof ids[0], "t%u", static_cast<unsigned>(i + 1));
+    snprintf(ids[2 * i + 1], sizeof ids[0], "v%u", static_cast<unsigned>(i + 1));
+    snprintf(labels[2 * i], sizeof labels[0], "Key %u type", static_cast<unsigned>(i + 1));
+    snprintf(labels[2 * i + 1], sizeof labels[0], "Key %u value", static_cast<unsigned>(i + 1));
     params[2 * i] = new WiFiManagerParameter(ids[2 * i], labels[2 * i], typeBuf[i], 9);
     params[2 * i + 1] = new WiFiManagerParameter(ids[2 * i + 1], labels[2 * i + 1], valueBuf[i], kKeyValueMax);
     wm.addParameter(params[2 * i]);
