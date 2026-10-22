@@ -76,7 +76,10 @@ void portalStop() {
 void portalPoll() {
   if (state == WifiState::Off) return;
   wm.process();
-  if (WiFi.status() == WL_CONNECTED && !webPortal) {
+  bool up = WiFi.status() == WL_CONNECTED;
+  if (state == WifiState::Joined && !up) state = WifiState::Starting;  // link lost: show it
+  if (up && webPortal) state = WifiState::Joined;                      // reconnected
+  if (up && !webPortal) {
     wm.startWebPortal();  // same param page on the home network (/param)
     MDNS.begin("saucedeck");
     webPortal = true;
@@ -102,3 +105,10 @@ bool portalTakeStaged(KeyMap &out, uint8_t &badKey) {
 }
 
 const char *portalApPassword() { return apPass; }
+
+void portalInfo(char *out, size_t n) {
+  if (WiFi.status() == WL_CONNECTED)
+    snprintf(out, n, "%s %ddBm", WiFi.localIP().toString().c_str(), static_cast<int>(WiFi.RSSI()));
+  else
+    snprintf(out, n, "status %d", static_cast<int>(WiFi.status()));
+}

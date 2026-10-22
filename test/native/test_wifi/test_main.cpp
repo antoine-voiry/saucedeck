@@ -53,6 +53,28 @@ void test_wifi_events_ignored_when_off() {
   TEST_ASSERT_TRUE(w.state() == WifiState::Off);
 }
 
+void test_wifi_lost_link_goes_back_to_starting() {
+  // Bug 2026-10-22: banner said "joined" after the link dropped
+  WifiSession w;
+  w.toggle(0);
+  w.onJoined();
+  w.onLost();
+  TEST_ASSERT_TRUE(w.state() == WifiState::Starting);
+  TEST_ASSERT_TRUE(w.on());
+  w.onJoined();
+  TEST_ASSERT_TRUE(w.state() == WifiState::Joined);
+}
+
+void test_wifi_lost_ignored_unless_joined() {
+  WifiSession w;
+  w.onLost();
+  TEST_ASSERT_TRUE(w.state() == WifiState::Off);
+  w.toggle(0);
+  w.onPortal();
+  w.onLost();
+  TEST_ASSERT_TRUE(w.state() == WifiState::Portal);
+}
+
 int main(int, char **) {
   UNITY_BEGIN();
   RUN_TEST(test_wifi_starts_off);
@@ -61,5 +83,7 @@ int main(int, char **) {
   RUN_TEST(test_wifi_auto_off_after_10_min_once);
   RUN_TEST(test_wifi_failed_goes_off);
   RUN_TEST(test_wifi_events_ignored_when_off);
+  RUN_TEST(test_wifi_lost_link_goes_back_to_starting);
+  RUN_TEST(test_wifi_lost_ignored_unless_joined);
   return UNITY_END();
 }
