@@ -1,6 +1,6 @@
 # SAUCEDECK
 
-USB HID macro deck. ESP32-S3 SuperMini (chip/flash/PSRAM variant unverified, see docs/kb/esp32s3.md). Enumerates on Mac/PC as `SAUCEDECK`.
+USB HID macro deck. ESP32-S3 SuperMini = ESP32-S3FH4R2: 4 MB flash, 2 MB PSRAM (verified 2026-10-22, docs/kb/esp32s3.md). Enumerates on Mac/PC as `SAUCEDECK`.
 12 keys + 2 EC11 encoders (via MCP23017 + direct GPIO), ST7789 2" LCD, WS2812B strip.
 Pinout source of truth: [wiring.md](wiring.md) → mirrored in [include/pins.h](include/pins.h). Change both or neither.
 

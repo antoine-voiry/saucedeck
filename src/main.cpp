@@ -12,6 +12,7 @@
 #include "idle_dimmer.h"
 #include "helper_link.h"
 #include "keymap_store.h"
+#include "wifi_portal.h"
 #include <esp_system.h>
 
 USBHIDKeyboard Keyboard;
@@ -36,7 +37,10 @@ static Deck deck(16);  // macOS: 16 VOL+/- steps full range (unverified)
 static bool mcpOk = false;
 static bool keymapResetNotice = false;  // blob present but corrupt -> defaults (banner)
 static bool brownoutNotice = false;     // last reset was a brownout (banner)
-static uint32_t helperMissingUntil = 0;  // "helper not running" banner end
+static uint32_t helperMissingUntil = 0;
+static WifiSession wifi;
+static uint8_t invalidKey = 0;
+static uint32_t invalidUntil = 0, wifiFailedUntil = 0;  // "helper not running" banner end
 static IdleDimmer dimmer;  // LEDs + LCD fade after 120 s idle, off at 240 s
 
 static void run(const ActionList &actions) {
@@ -73,7 +77,20 @@ static void run(const ActionList &actions) {
       case ActionType::MicDown: helperSendMicDelta(-1); break;
       case ActionType::HelperMissing: helperMissingUntil = millis() + 2000; break;
       case ActionType::WifiToggle:
-      case ActionType::KeyMapDiscarded: break;  // wired in later tasks
+        wifi.toggle(millis());
+        if (wifi.on()) {
+          if (portalStart(deck.keyMap())) {
+            displaySetApPassword(portalApPassword());
+          } else {
+            wifi.onFailed();
+            wifiFailedUntil = millis() + 4000;
+          }
+        } else {
+          portalStop();
+        }
+        ledsSetWifi(wifi.on());
+        break;
+      case ActionType::KeyMapDiscarded: break;  // banner simply disappears
       case ActionType::KeyMapCommitted: keymapSave(deck.keyMap()); break;
       case ActionType::MicMute:
         // Release only the chord keys: deck F-keys may still be held
@@ -132,9 +149,30 @@ void loop() {
   if (d1 || d2) deck.onEncoders(d1, d2, millis(), actions);
   run(actions);
 
-  // Any input (still acted on above) or an on-screen prompt keeps the deck awake
   now = millis();
-  if (actions.count || d1 || d2 || deck.pending() || deck.chordHeldMs(now) > 0) dimmer.onActivity(now);
+  portalPoll();
+  if (wifi.on()) {
+    if (portalState() == WifiState::Joined) wifi.onJoined();
+    else if (portalState() == WifiState::Portal) wifi.onPortal();
+  }
+  if (wifi.tick(now)) {  // 10 min auto-off
+    portalStop();
+    ledsSetWifi(false);
+  }
+  KeyMap staged;
+  uint8_t bad = 0;
+  if (portalTakeStaged(staged, bad)) {
+    if (bad) {
+      invalidKey = bad;
+      invalidUntil = now + 4000;
+    } else {
+      deck.stage(staged, now);  // goes live only after a knob 1 press
+    }
+  }
+
+  // Any input (still acted on above) or an on-screen prompt keeps the deck awake
+  if (actions.count || d1 || d2 || deck.pending() || wifi.on() || deck.chordHeldMs(now) > 0)
+    dimmer.onActivity(now);
   uint8_t dim = dimmer.level(now);
   ledsSetDim(dim);
   displaySetDim(dim);
@@ -147,8 +185,32 @@ void loop() {
   bool micKnown = hl.present(now) && hl.hasMic();
   bool micMuted = micKnown ? hl.micMuted() : deck.micMuted();
   uint8_t micPct = micKnown ? hl.micPercent() : 0;
-  uint8_t banner = BANNER_NONE;
-  if (static_cast<int32_t>(helperMissingUntil - now) > 0) banner = BANNER_HELPER_MISSING;
-  displayUpdate({pct, spkMuted, micMuted, micKnown, micPct, banner, 0}, now);
+  uint8_t banner = BANNER_NONE, arg = 0;
+  uint32_t held = deck.chordHeldMs(now);
+  if (deck.pending()) {
+    banner = BANNER_APPLY;
+    arg = static_cast<uint8_t>((deck.pendingMsLeft(now) + 999) / 1000);
+  } else if (held > 500 && held < KnobChord::kWifiHoldMs) {
+    banner = BANNER_WIFI_COUNTDOWN;
+    arg = static_cast<uint8_t>((KnobChord::kWifiHoldMs - held + 999) / 1000);
+  } else if (static_cast<int32_t>(invalidUntil - now) > 0) {
+    banner = BANNER_INVALID_KEY;
+    arg = invalidKey;
+  } else if (static_cast<int32_t>(helperMissingUntil - now) > 0) {
+    banner = BANNER_HELPER_MISSING;
+  } else if (static_cast<int32_t>(wifiFailedUntil - now) > 0) {
+    banner = BANNER_WIFI_FAILED;
+  } else if (wifi.state() == WifiState::Portal) {
+    banner = BANNER_WIFI_PORTAL;
+  } else if (wifi.state() == WifiState::Joined) {
+    banner = BANNER_WIFI_JOINED;
+  } else if (wifi.state() == WifiState::Starting) {
+    banner = BANNER_WIFI_STARTING;
+  } else if (keymapResetNotice && now < 5000) {
+    banner = BANNER_KEYMAP_RESET;
+  } else if (brownoutNotice && now < 8000) {
+    banner = BANNER_BROWNOUT;
+  }
+  displayUpdate({pct, spkMuted, micMuted, micKnown, micPct, banner, arg}, now);
   ledsUpdate({pct, spkMuted, micMuted}, now);
 }

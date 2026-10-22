@@ -13,7 +13,8 @@
 ## Board actually used: ESP32-S3 SuperMini
 - **SAUCEDECK runs on an ESP32-S3 SuperMini, not a Waveshare S3-Zero (earlier docs wrong).** `[verified: operator, 2026-10-05]`
 - **SuperMini free pins after 2026-10-18 rebuild: GPIO5 and U0TXD GPIO43. GPIO44 = LCD RST (correction: was button sense in old build).** GPIO43 prints ROM boot log at reset → avoid for inputs that touch other circuits. `[verified: operator + ESP32-S3 datasheet UART0 default pins]`
-- **SuperMini chip/flash/PSRAM variant and onboard LED pin.** `[unverified — read with esptool chip_id/flash_id]`
+- **SuperMini chip = ESP32-S3 (QFN56) rev v0.2, embedded 4 MB flash (XMC, mfr 0x46 dev 0x4016), embedded 2 MB PSRAM (AP_3v3) = ESP32-S3FH4R2.** `[verified: esptool flash_id after 1200 bps touch, 2026-10-22]` (Correction: was unverified.) Onboard LED pin still `[unverified]`.
+- **esptool over TinyUSB CDC can't reset the chip itself ("No serial data received"): do the 1200 bps touch first, then `--before no_reset`.** `[verified: bench 2026-10-22]`
 
 ## Waveshare ESP32-S3-Zero (NOT this project's board, kept for reference)
 - **Chip: ESP32-S3FH4R2 — 4 MB in-package flash, 2 MB QSPI PSRAM.** `[verified: Waveshare wiki]`
