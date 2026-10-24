@@ -2124,7 +2124,7 @@ If `test_short_bus_glitch_does_not_release_held_key` or `test_expander_back_afte
 
 - [ ] **Step 3: Mutation spot-check (then revert)**
 
-In `lib/deck_core/src/deck.h`, `onBusLost`: comment out `out.push(ActionType::ReleaseAll);`. Run: `test_bus_loss_while_key_held_releases_it` must FAIL. Revert with `git checkout lib/deck_core/src/deck.h`.
+In `lib/deck_core/src/deck.h`, `onBusLost`: replace `out.push(ActionType::ReleaseAll);` with `out.push(ActionType::Sync);` (commenting it out leaves `out` unused and `-Werror` stops the build). Run: `test_bus_loss_while_key_held_releases_it` must FAIL. Revert with `git checkout lib/deck_core/src/deck.h`.
 
 - [ ] **Step 4: Commit**
 
