@@ -1,0 +1,17 @@
+{
+  "name": "Mac daily (F13-F24 -> macOS Shortcuts app, see docs/mac-shortcuts.md)",
+  "keys": [
+    { "label": "Screenshot",      "type": "key", "value": "f13" },
+    { "label": "Chrome",          "type": "key", "value": "f14" },
+    { "label": "Gmail in Chrome", "type": "key", "value": "f15" },
+    { "label": "Telegram",        "type": "key", "value": "f16" },
+    { "label": "Fusion 360",      "type": "key", "value": "f17" },
+    { "label": "System Settings", "type": "key", "value": "f18" },
+    { "label": "Help (Tips)",     "type": "key", "value": "f19" },
+    { "label": "YouTube",         "type": "key", "value": "f20" },
+    { "label": "Hide app",        "type": "key", "value": "f21" },
+    { "label": "iMessage",        "type": "key", "value": "f22" },
+    { "label": "Weather",         "type": "key", "value": "f23" },
+    { "label": "Bambu Studio",    "type": "key", "value": "f24" }
+  ]
+}

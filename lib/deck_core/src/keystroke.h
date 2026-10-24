@@ -35,6 +35,7 @@ inline uint8_t keyUsage(const char *t, size_t n) {
   if (tokenIs(t, n, "esc")) return 0x29;
   if (tokenIs(t, n, "tab")) return 0x2B;
   if (tokenIs(t, n, "space")) return 0x2C;
+  if (n == 1 && t[0] == '/') return 0x38;  // US-layout position; cmd+shift+/ = macOS Help menu
   if (n >= 2 && n <= 3 && t[0] == 'f') {
     int num = 0;
     for (size_t i = 1; i < n; i++) {
