@@ -1,0 +1,11 @@
+2026-10-24 bench session (HID firmware `saucedeck` env, flashed today)
+
+USB:   SAUCEDECK enumerates as keyboard (page 1/usage 6) + consumer (page 12/usage 1),
+       VID 0x303a PID 0x1001 (hidutil list).
+HID:   knob 1 turn -> Mac volume moves (operator).
+Keys:  CGEventTap logger on the Mac: F13-F20 arrive; F21-F24 produce no event (macOS has no
+       keycode). Preset mac-daily loaded via portal; keys 1-9, 11-12 trigger their Hammerspoon /
+       macOS actions (operator). Key 10 sends Ctrl+Opt+Cmd+F13 (logger); Messages issue is Mac-side.
+LCD+LED: operator: LCD and WS2812 strip run together with no issue. -> WS2812 3.3 V data OK on
+       this unit (functional only, no scope).
+Open:  LCD BL current on GPIO9 still not measured (functional OK does not prove <= 20 mA).
