@@ -80,11 +80,13 @@ Done = `pio test -e native` green AND `pio run -e saucedeck -e bringup` SUCCESS 
 - USB strings = build flags `USB_PRODUCT` / `USB_MANUFACTURER` in platformio.ini. CDC_ON_BOOT=1 → core runs `USB.begin()` before `setup()`, so `USB.productName()` in setup is ignored (docs/kb/toolchain.md).
 - HID: `USBHIDKeyboard` (F13–F24 for keys) + `USBHIDConsumerControl` (media).
 
-## Status (2026-10-18)
+## Status (2026-10-24)
 
 - Hardware rebuilt + bench-verified: LCD, LED, 12 keys, 2 knob switches, 2 encoders (log: docs/bringup/2026-10-18.log).
-- `src/main.cpp` (HID firmware) is ported to MCP23017 + new pins and builds, but is NOT flashed or tested on the Mac yet → next session.
-- Board currently runs the `bringup` firmware.
+- Board runs the HID firmware (`saucedeck` env), flashed 2026-10-24. Enumerates as keyboard + consumer, knob 1 volume OK.
+- Mac actions: Hammerspoon (`tools/mac/hammerspoon.lua`) + preset `presets/mac-daily.json`, setup in docs/mac-setup.md.
+  All 12 keys bench-verified on the deck side; key 10 (Messages) issue is Mac-side, closed.
+- Never map Mac actions to F21-F24: macOS drops them (docs/kb/toolchain.md).
 - Open: LCD BL current on GPIO9 not measured. WS2812 3.3 V data margin (full strip untested).
 
 ## Hardware gotchas (detail + sources in docs/kb/esp32s3.md)
