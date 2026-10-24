@@ -33,3 +33,13 @@
   Hammerspoon hs.hotkey on F13-F20 works. [verified: bench, 2026-10-24]
 - Deck enumerates as keyboard (page 1 usage 6) + consumer (page 12 usage 1), VID 0x303a PID 0x1001.
   [verified: hidutil list, 2026-10-24]
+
+## PlatformIO native tests (2026-10-24)
+
+- PIO 6.2 reports any failing native suite as ERRORED with "Program received signal SIGHUP" and
+  counts one extra test case (e.g. "22 test cases: 1 failed, 20 succeeded" for 21 tests). Unity's
+  own line ("N Tests M Failures") is the true count. Not caused by the sim fork harness: same in
+  env native. [verified: bench run, 2026-10-24]
+- One `pio run -e saucedeck -e bringup` failed once (saucedeck, 3 s) and left a generated
+  `src/idf_component.yml`; not reproducible (incremental, clean, without the file). Watch for it.
+  [unverified cause]
