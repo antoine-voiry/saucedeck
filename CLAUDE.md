@@ -87,7 +87,8 @@ Done = `pio test -e native` green AND `pio run -e saucedeck -e bringup` SUCCESS 
 - Mac actions: Hammerspoon (`tools/mac/hammerspoon.lua`) + preset `presets/mac-daily.json`, setup in docs/mac-setup.md.
   All 12 keys bench-verified on the deck side; key 10 (Messages) issue is Mac-side, closed.
 - Never map Mac actions to F21-F24: macOS drops them (docs/kb/toolchain.md).
-- Open: LCD BL current on GPIO9 not measured. WS2812 3.3 V data margin (full strip untested).
+- LCD + WS2812 strip run together with no issue (operator, docs/bringup/2026-10-24.log): WS2812 3.3 V data OK on this unit.
+- Open: LCD BL current on GPIO9 not measured (works != within 20 mA).
 
 ## Hardware gotchas (detail + sources in docs/kb/esp32s3.md)
 
