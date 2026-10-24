@@ -21,9 +21,29 @@ static bool paramsAdded = false;
 static bool savedPending = false;
 static bool webPortal = false;
 
+// Preset loader (presets/*.json): browser-side only, it just fills the 24 inputs below.
+// The deck still re-validates every field on Save and waits for the knob 1 confirm.
+static const char kPresetHtml[] =
+    "<p><b>Load preset</b> (.json, 12 keys), check the fields, then Save.</p>"
+    "<input type='file' id='pf' accept='.json,application/json'><div id='ps'></div>"
+    "<script>document.getElementById('pf').onchange=function(e){"
+    "var f=e.target.files[0],s=document.getElementById('ps');if(!f)return;"
+    "f.text().then(function(t){var k=JSON.parse(t).keys;"
+    "if(!Array.isArray(k)||k.length!=12)throw Error('need 12 keys');"
+    "k.forEach(function(x,i){if(['key','app','url','shortcut'].indexOf(x.type)<0)"
+    "throw Error('key '+(i+1)+': bad type');"
+    "if(typeof x.value!='string'||!x.value.length||x.value.length>56)"
+    "throw Error('key '+(i+1)+': value 1-56 chars');});"
+    "k.forEach(function(x,i){document.getElementById('t'+(i+1)).value=x.type;"
+    "document.getElementById('v'+(i+1)).value=x.value;});"
+    "s.textContent='Loaded '+f.name+'. Press Save, then knob 1 on the deck.';"
+    "}).catch(function(err){s.textContent='Bad preset: '+err.message;});};</script>";
+static WiFiManagerParameter presetParam(kPresetHtml);  // custom HTML: no id, no value
+
 static void onSave() { savedPending = true; }
 
 static void buildParams(const KeyMap &m) {
+  if (!paramsAdded) wm.addParameter(&presetParam);
   for (uint8_t i = 0; i < kKeyCount; i++) {
     snprintf(typeBuf[i], sizeof typeBuf[i], "%s", keyTypeName(m.entry(i).type));
     snprintf(valueBuf[i], sizeof valueBuf[i], "%s", m.entry(i).value);

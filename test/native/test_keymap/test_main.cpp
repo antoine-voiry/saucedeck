@@ -1,4 +1,5 @@
 #include <unity.h>
+#include <stdio.h>
 #include <string.h>
 #include "keystroke.h"
 #include "keymap.h"
@@ -37,6 +38,12 @@ void test_ks_digits_and_named_keys() {
   TEST_ASSERT_EQUAL_HEX8(0x29, ks("esc").usage);
   TEST_ASSERT_EQUAL_HEX8(0x2B, ks("tab").usage);
   TEST_ASSERT_EQUAL_HEX8(0x2C, ks("space").usage);
+}
+
+void test_ks_slash_for_help_menu() {
+  Keystroke k = ks("cmd+shift+/");  // macOS Help menu search (US layout position)
+  TEST_ASSERT_EQUAL_HEX8(0x0A, k.mods);
+  TEST_ASSERT_EQUAL_HEX8(0x38, k.usage);
 }
 
 void test_ks_function_keys() {
@@ -136,6 +143,18 @@ void test_keymap_equality() {
 
 // --- KeyMap blob ---
 
+// presets/mac-daily.json = F13..F24 in order (macOS Shortcuts does the rest): the same
+// map as the factory default, so "load preset" also works as a reset.
+void test_keymap_mac_daily_preset_matches_defaults() {
+  KeyMap m;
+  for (uint8_t i = 0; i < kKeyCount; i++) {
+    char v[8];
+    snprintf(v, sizeof v, "f%u", 13u + i);
+    TEST_ASSERT_EQUAL(KeyMapError::None, m.setFromStrings(i, "key", v));
+  }
+  TEST_ASSERT_TRUE(m == KeyMap());
+}
+
 void test_crc32_check_value() {
   const uint8_t s[] = {'1', '2', '3', '4', '5', '6', '7', '8', '9'};
   TEST_ASSERT_EQUAL_HEX32(0xCBF43926, crc32(s, sizeof s));
@@ -199,6 +218,7 @@ int main(int, char **) {
   RUN_TEST(test_ks_cmd_shift_4);
   RUN_TEST(test_ks_all_modifiers_case_insensitive);
   RUN_TEST(test_ks_digits_and_named_keys);
+  RUN_TEST(test_ks_slash_for_help_menu);
   RUN_TEST(test_ks_function_keys);
   RUN_TEST(test_ks_rejects_bad_input);
   RUN_TEST(test_ks_rejects_overlong_input);
@@ -209,6 +229,7 @@ int main(int, char **) {
   RUN_TEST(test_keymap_value_length_limit);
   RUN_TEST(test_keymap_set_from_strings);
   RUN_TEST(test_keymap_equality);
+  RUN_TEST(test_keymap_mac_daily_preset_matches_defaults);
   RUN_TEST(test_crc32_check_value);
   RUN_TEST(test_blob_roundtrip);
   RUN_TEST(test_blob_rejects_corruption_and_keeps_target);
