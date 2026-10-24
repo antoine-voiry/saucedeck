@@ -1,5 +1,5 @@
 {
-  "name": "Mac daily (F13-F24 -> macOS Shortcuts app, see docs/mac-shortcuts.md)",
+  "name": "Mac daily (Hammerspoon: tools/mac/hammerspoon.lua, see docs/mac-setup.md)",
   "keys": [
     { "label": "Screenshot",      "type": "key", "value": "f13" },
     { "label": "Chrome",          "type": "key", "value": "f14" },
@@ -9,9 +9,9 @@
     { "label": "System Settings", "type": "key", "value": "f18" },
     { "label": "Help (Tips)",     "type": "key", "value": "f19" },
     { "label": "YouTube",         "type": "key", "value": "f20" },
-    { "label": "Hide app",        "type": "key", "value": "f21" },
-    { "label": "iMessage",        "type": "key", "value": "f22" },
-    { "label": "Weather",         "type": "key", "value": "f23" },
-    { "label": "Bambu Studio",    "type": "key", "value": "f24" }
+    { "label": "Hide app",        "type": "key", "value": "cmd+h" },
+    { "label": "iMessage",        "type": "key", "value": "ctrl+alt+cmd+f13" },
+    { "label": "Weather",         "type": "key", "value": "ctrl+alt+cmd+f14" },
+    { "label": "Bambu Studio",    "type": "key", "value": "ctrl+alt+cmd+f15" }
   ]
 }
