@@ -42,10 +42,56 @@ SIM_TEST(test_boot_configures_mcp_inputs_pullups_and_output_only_pins) {
   TEST_ASSERT_TRUE(sim.host().kb.empty());  // idle deck sends nothing
 }
 
+// --- keys, factory default map (F13..F24) ---
+
+static constexpr uint32_t kSettle = 30;  // > 25 ms debounce (lib/deck_core/src/debounce.h)
+
+SIM_TEST(test_default_map_each_key_sends_its_f_key) {
+  SimDeck sim;
+  sim.boot();
+  for (uint8_t pos = 1; pos <= 12; pos++) {
+    char msg[24];
+    snprintf(msg, sizeof msg, "key %u", pos);
+    sim.press(pos);
+    sim.run(kSettle);
+    TEST_ASSERT_TRUE_MESSAGE(sim.host().keyDown(static_cast<uint8_t>(0x68 + pos - 1)), msg);
+    sim.release(pos);
+    sim.run(kSettle);
+    TEST_ASSERT_TRUE_MESSAGE(sim.host().allKeysUp(), msg);
+  }
+}
+
+SIM_TEST(test_bounce_shorter_than_debounce_sends_nothing) {
+  SimDeck sim;
+  sim.boot();
+  sim.press(3);
+  sim.run(10);
+  sim.release(3);
+  sim.run(kSettle);
+  TEST_ASSERT_TRUE(sim.host().kb.empty());
+}
+
+SIM_TEST(test_two_keys_held_then_one_released) {
+  SimDeck sim;
+  sim.boot();
+  sim.press(1);
+  sim.press(2);
+  sim.run(kSettle);
+  TEST_ASSERT_TRUE(sim.host().keyDown(0x68));
+  TEST_ASSERT_TRUE(sim.host().keyDown(0x69));
+  sim.release(1);
+  sim.run(kSettle);
+  TEST_ASSERT_FALSE(sim.host().keyDown(0x68));
+  TEST_ASSERT_TRUE(sim.host().keyDown(0x69));
+}
+
 int main(int, char **) {
   UNITY_BEGIN();
   RUN_TEST(test_harness_a_mutates_board);
   RUN_TEST(test_harness_b_sees_fresh_board);
   RUN_TEST(test_boot_configures_mcp_inputs_pullups_and_output_only_pins);
+  RUN_TEST(test_default_map_each_key_sends_its_f_key);
+  RUN_TEST(test_bounce_shorter_than_debounce_sends_nothing);
+  RUN_TEST(test_two_keys_held_then_one_released);
   return UNITY_END();
 }
