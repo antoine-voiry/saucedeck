@@ -149,6 +149,59 @@ SIM_TEST(test_chord_modifier_before_key_and_after_key_on_release) {
   TEST_ASSERT_EQUAL_HEX8(0x00, r[at + 3].mods);
 }
 
+// --- MCP23017 faults (bench 2026-10-18: bad contact on the module header) ---
+
+SIM_TEST(test_bus_loss_while_key_held_releases_it) {
+  SimDeck sim;
+  sim.boot();
+  sim.press(4);
+  sim.run(kSettle);
+  TEST_ASSERT_TRUE(sim.host().keyDown(0x6B));
+  sim.fault().mcpAbsent(true);
+  sim.run(25);  // > kBusLostMs = 20 (lib/deck_core/src/deck.h)
+  TEST_ASSERT_TRUE(sim.host().allKeysUp());
+}
+
+SIM_TEST(test_short_bus_glitch_does_not_release_held_key) {
+  SimDeck sim;
+  sim.boot();
+  sim.press(4);
+  sim.run(kSettle);
+  size_t at = sim.host().kb.size();
+  sim.fault().mcpAbsent(true);
+  sim.run(10);  // < kBusLostMs
+  sim.fault().mcpAbsent(false);
+  sim.run(kSettle);
+  TEST_ASSERT_TRUE(sim.host().keyDown(0x6B));
+  TEST_ASSERT_EQUAL(at, sim.host().kb.size());  // no release / re-press seen by the Mac
+}
+
+SIM_TEST(test_expander_back_after_loss_key_still_held_is_pressed_again) {
+  SimDeck sim;
+  sim.boot();
+  sim.press(4);
+  sim.run(kSettle);
+  sim.fault().mcpAbsent(true);
+  sim.run(25);
+  sim.mcp().reset();  // power-cycled module comes back at POR state
+  sim.fault().mcpAbsent(false);
+  sim.run(60);
+  TEST_ASSERT_EQUAL_HEX8(0x7F, sim.mcp().reg[MCP_GPPUA]);  // re-initialised by mcpBegin
+  TEST_ASSERT_TRUE(sim.host().keyDown(0x6B));
+}
+
+SIM_TEST(test_expander_absent_at_boot_then_plugged) {
+  SimDeck sim;
+  sim.fault().mcpAbsent(true);
+  sim.boot();
+  sim.press(1);
+  sim.run(50);
+  TEST_ASSERT_FALSE(sim.host().keyDown(0x68));
+  sim.fault().mcpAbsent(false);
+  sim.run(60);
+  TEST_ASSERT_TRUE(sim.host().keyDown(0x68));
+}
+
 int main(int, char **) {
   UNITY_BEGIN();
   RUN_TEST(test_harness_a_mutates_board);
@@ -161,5 +214,9 @@ int main(int, char **) {
   RUN_TEST(test_mac_daily_key_9_sends_cmd_h);
   RUN_TEST(test_mac_daily_keys_10_to_12_send_ctrl_alt_cmd_f13_to_f15);
   RUN_TEST(test_chord_modifier_before_key_and_after_key_on_release);
+  RUN_TEST(test_bus_loss_while_key_held_releases_it);
+  RUN_TEST(test_short_bus_glitch_does_not_release_held_key);
+  RUN_TEST(test_expander_back_after_loss_key_still_held_is_pressed_again);
+  RUN_TEST(test_expander_absent_at_boot_then_plugged);
   return UNITY_END();
 }
