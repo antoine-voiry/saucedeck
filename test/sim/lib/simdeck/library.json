@@ -1,0 +1,8 @@
+{
+  "name": "simdeck",
+  "version": "0.1.0",
+  "description": "Host fakes + simulated SAUCEDECK board for scenario tests (test only)",
+  "frameworks": "*",
+  "platforms": "native",
+  "build": { "flags": "-Wno-unused-parameter" }
+}
