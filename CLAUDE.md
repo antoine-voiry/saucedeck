@@ -37,6 +37,8 @@ Layout:
 - `test/native/<suite>/` — Unity tests for `deck_core`, run on host. One suite per module (`test_core`, `test_bringup`, `test_mcp`).
 - `src/` — thin hardware glue only: pin I/O, USB, I2C, SPI calls into `deck_core`. Keep logic out of here.
 - `src/bringup/` — wiring test firmware (`bringup` env). Excluded from production build.
+- `test/sim/lib/simdeck/` — host fakes for Arduino/ESP-IDF/vendor headers + simulated board models. Each model header lists its hardware assumptions with sources.
+- `test/native/test_sim_*/` — scenario tests: real `src/` against the sim. `SIM_TEST` = fresh device (fork) per test.
 
 Loop per change:
 1. Write failing test in `test/native/<suite>/`. Run, confirm it fails for the right reason.
@@ -63,6 +65,8 @@ Any wiring change → rerun bring-up before trusting firmware.
 
 ```sh
 pio test -e native          # unit tests (host). Must pass before any commit.
+pio test -e sim             # real src/ firmware on the simulated board (test/sim/lib/simdeck)
+tools/coverage.sh           # coverage over deck_core + src/ (MIN_LINE=0 MIN_BRANCH=0 = report only)
 pio run                     # build firmware (env: saucedeck)
 pio run -e bringup -t upload && pio device monitor   # wiring test
 pio run -t upload           # flash. Auto-reset via 1200bps touch. Dead board: hold BOOT, plug USB, release.

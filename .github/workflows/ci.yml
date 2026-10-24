@@ -27,6 +27,8 @@ jobs:
         run: pip install platformio==6.2.0
       - name: Unit tests (host)
         run: pio test -e native
+      - name: Device sim tests (real src/ on the simulated board)
+        run: pio test -e sim
       - name: Static analysis (cppcheck)
         run: pio check -e native --fail-on-defect=medium --skip-packages
       - name: Firmware builds

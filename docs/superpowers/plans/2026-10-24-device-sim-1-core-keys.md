@@ -2192,3 +2192,12 @@ git commit -m "CI runs device sim tests; CLAUDE.md: sim + coverage commands (cov
 ## After this plan
 
 Plan 2 (knobs/display/LEDs) starts from the coverage report of Task 6: it lists the uncovered lines in `src/encoders.cpp`, `src/display.cpp`, `src/leds.cpp`, `src/main.cpp`, which define its scenarios.
+
+Measured at the end of plan 1 (2026-10-24, macOS clang): lines 76.4 % (919/1203), branches
+69.6 % (585/840). Per file: wifi_portal.cpp 9 %, display.cpp 24 %, helper_link.cpp 34 %,
+main.cpp 59 %, keymap_store.cpp 60 %, encoders.cpp 85 %, leds.cpp 94 %.
+
+**Carry into plan 4:** `src/bringup/main.cpp` is absent from the report (no env compiles it with
+coverage yet). gcovr only counts files some test compiled, so the gate must also check that every
+`src/**/*.cpp` (except spikes) appears in the merged report, or an untested file passes silently.
+
