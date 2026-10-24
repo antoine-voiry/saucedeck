@@ -8,4 +8,4 @@ Keys:  CGEventTap logger on the Mac: F13-F20 arrive; F21-F24 produce no event (m
        macOS actions (operator). Key 10 sends Ctrl+Opt+Cmd+F13 (logger); Messages issue is Mac-side.
 LCD+LED: operator: LCD and WS2812 strip run together with no issue. -> WS2812 3.3 V data OK on
        this unit (functional only, no scope).
-Open:  LCD BL current on GPIO9 still not measured (functional OK does not prove <= 20 mA).
+BL:    LCD backlight current on GPIO9 = 19 mA, BL on (multimeter in series, operator). <= 20 mA: OK, 1 mA margin.
