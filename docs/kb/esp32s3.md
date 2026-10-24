@@ -23,3 +23,4 @@
 - **3.3V LDO max current.** `[unverified — check S3-Zero schematic]`
 - **PCNT: 1 group, 4 units, 2 channels/unit → 2 EC11 knobs use 2 units (x4 quadrature, edge+level per channel).** `[verified: framework soc_caps.h:275-277 (SOC_PCNT_*), 2026-10-19]`
 - **IDF 5 PCNT driver `pcnt_unit_config_t.flags.accum_count` + watch points at ±limit → `pcnt_unit_get_count()` returns an accumulated count across overflow.** `[verified: driver/pulse_cnt.h:67, 2026-10-19]` Glitch filter range for S3 `[unverified — TRM PCNT chapter]`.
+- **SAUCEDECK LCD backlight on GPIO9 draws 19 mA with BL fully on (limit used: 20 mA per pin, 1 mA margin).** Re-measure after any BL/LCD module change. `[verified: bench, multimeter in series, 2026-10-24]`

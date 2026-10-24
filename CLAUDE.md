@@ -88,7 +88,7 @@ Done = `pio test -e native` green AND `pio run -e saucedeck -e bringup` SUCCESS 
   All 12 keys bench-verified on the deck side; key 10 (Messages) issue is Mac-side, closed.
 - Never map Mac actions to F21-F24: macOS drops them (docs/kb/toolchain.md).
 - LCD + WS2812 strip run together with no issue (operator, docs/bringup/2026-10-24.log): WS2812 3.3 V data OK on this unit.
-- Open: LCD BL current on GPIO9 not measured (works != within 20 mA).
+- LCD BL current on GPIO9 = 19 mA, BL fully on (bench-measured 2026-10-24). Within 20 mA, 1 mA margin. No open hardware items.
 
 ## Hardware gotchas (detail + sources in docs/kb/esp32s3.md)
 
@@ -102,7 +102,7 @@ Done = `pio test -e native` green AND `pio run -e saucedeck -e bringup` SUCCESS 
 - I2C fails only after the bus idles a few ms → bad contact on module wires/header (seen 2026-10-18), not firmware. Run `d` / `e` first.
 - GPIO19/20 = USB D-/D+. GPIO26–32 = in-package flash/PSRAM. Never touch.
 - SuperMini: very few free pins. GPIO44 (U0RXD) = LCD RST. Free: GPIO5, GPIO43 (U0TXD, boot log output, avoid).
-- LCD BL on GPIO9: measure BL current ≤20 mA before trusting it; else BL → 3V3.
+- LCD BL on GPIO9: 19 mA measured (2026-10-24), limit 20 mA. Never lower its series resistance or add load on this pin; if BL changes, re-measure, else BL → 3V3.
 - Uploads locked to `/dev/cu.usbmodem*`: a CH9102 ESP32 board often sits on the same desk.
 - WS2812B strip at 5V: VIH min 0.7×VDD = 3.5V > 3.3V GPIO out. Marginal. Recommend 74AHCT1G125 level shifter.
 - USB power budget 500 mA. Cap LED brightness in firmware.
