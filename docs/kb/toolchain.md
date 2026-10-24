@@ -23,3 +23,13 @@
 - **Arduino USBHID = ONE HID interface for keyboard (report ID 1) + consumer (ID 4) + USBHIDVendor (usage page 0xFF00, ID 6, 63 B in/out/feature). macOS sees one IOHIDDevice with PrimaryUsage = keyboard: match on DeviceUsagePage (not PrimaryUsagePage). Opening it from an unprivileged process: IOHIDManagerOpen = 0xe00002e2 (kIOReturnNotPermitted), SetReport = 0xe00002cd (not open) -> needs Input Monitoring.** `[verified: ioreg ReportDescriptor + tools/spike/hidprobe.swift, 2026-10-21]`
 - **Production firmware with WiFiManager + Wi-Fi = 1,211,351 B: does not fit the default 1.25 MB app slot (92 %) → huge_app.csv (3 MB, 38.5 %). Partition table rewritten at 0x8000 by a normal pio upload.** `[verified: build + upload 2026-10-22]`
 - **WiFiManager 2.0.17 on pioarduino 55.03.35: custom params served in STA mode at /param after startWebPortal(); mDNS saucedeck.local resolves.** `[verified: bench curl 2026-10-22]`
+
+## macOS host keys (2026-10-24, macOS 26.7.1)
+
+- F13-F20 from the deck arrive as macOS keyDown events (keycodes 105/107/113/106/64/79/80/90).
+  F21-F24 (HID 0x70-0x73) produce no event at all: macOS has no virtual keycode for them.
+  Never map Mac actions to F21-F24. [verified: CGEventTap logger on bench, 2026-10-24]
+- Shortcuts app "Add Keyboard Shortcut" recorded no key (not even Ctrl+Opt+Cmd+T) on this Mac.
+  Hammerspoon hs.hotkey on F13-F20 works. [verified: bench, 2026-10-24]
+- Deck enumerates as keyboard (page 1 usage 6) + consumer (page 12 usage 1), VID 0x303a PID 0x1001.
+  [verified: hidutil list, 2026-10-24]

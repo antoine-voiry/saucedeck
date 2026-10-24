@@ -143,16 +143,18 @@ void test_keymap_equality() {
 
 // --- KeyMap blob ---
 
-// presets/mac-daily.json = F13..F24 in order (macOS Shortcuts does the rest): the same
-// map as the factory default, so "load preset" also works as a reset.
-void test_keymap_mac_daily_preset_matches_defaults() {
+// Same 12 entries as presets/mac-daily.json (Hammerspoon: tools/mac/hammerspoon.lua).
+// macOS drops F21-F24 (no virtual keycode), so keys 10-12 use ctrl+alt+cmd+F13..F15.
+void test_keymap_mac_daily_preset_is_valid() {
+  static const char *const kPreset[kKeyCount] = {
+      "f13", "f14", "f15", "f16", "f17", "f18", "f19", "f20",
+      "cmd+h", "ctrl+alt+cmd+f13", "ctrl+alt+cmd+f14", "ctrl+alt+cmd+f15",
+  };
   KeyMap m;
-  for (uint8_t i = 0; i < kKeyCount; i++) {
-    char v[8];
-    snprintf(v, sizeof v, "f%u", 13u + i);
-    TEST_ASSERT_EQUAL(KeyMapError::None, m.setFromStrings(i, "key", v));
-  }
-  TEST_ASSERT_TRUE(m == KeyMap());
+  for (uint8_t i = 0; i < kKeyCount; i++)
+    TEST_ASSERT_EQUAL_MESSAGE(KeyMapError::None, m.setFromStrings(i, "key", kPreset[i]), kPreset[i]);
+  TEST_ASSERT_EQUAL_HEX8(0x0D, m.entry(9).ks.mods);  // ctrl bit0 | alt bit2 | cmd bit3
+  TEST_ASSERT_EQUAL_HEX8(0x68, m.entry(9).ks.usage);  // F13
 }
 
 void test_crc32_check_value() {
@@ -229,7 +231,7 @@ int main(int, char **) {
   RUN_TEST(test_keymap_value_length_limit);
   RUN_TEST(test_keymap_set_from_strings);
   RUN_TEST(test_keymap_equality);
-  RUN_TEST(test_keymap_mac_daily_preset_matches_defaults);
+  RUN_TEST(test_keymap_mac_daily_preset_is_valid);
   RUN_TEST(test_crc32_check_value);
   RUN_TEST(test_blob_roundtrip);
   RUN_TEST(test_blob_rejects_corruption_and_keeps_target);
