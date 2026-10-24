@@ -42,4 +42,5 @@ Tried 2026-10-24 on macOS 26.7.1, bench-verified:
 | 12 | Ctrl+Opt+Cmd+F15 | Bambu Studio |
 
 Edit actions in `tools/mac/hammerspoon.lua`, then Hammerspoon menu → Reload Config.
-Bench-verified 2026-10-24: keys 4 and 8. Others pending the preset load.
+Bench-verified 2026-10-24: keys 1-9 and 11-12. Key 10: the deck sends Ctrl+Opt+Cmd+F13 (seen by a
+CGEventTap logger), but Messages did not come up; that is on the Mac side, not the deck.
