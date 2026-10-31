@@ -62,7 +62,8 @@ small; FreeSans9pt (~12 px cap-to-descender) is the minimum. Bench-check at arm'
 
 ### 4.1 Key labels (KeyMap v2)
 - `KeyEntry` gains `char label[kKeyLabelMax + 1]`, `kKeyLabelMax = 16`, printable ASCII
-  (0x20–0x7E) or empty.
+  (0x20–0x7E) or empty, excluding `" < > &` (WiFiManager inserts param values into the portal
+  HTML unescaped).
 - `KeyMap::setLabel(i, text)` validates like values (`TooLong`, `NotPrintable`).
 - NVS blob version 2: `'SDKM', 2, 12 × [type, vlen, value, llen, label], CRC32`.
   Version 1 blobs still load (labels empty). Bad magic/version/CRC → defaults as today.
@@ -113,7 +114,7 @@ small; FreeSans9pt (~12 px cap-to-descender) is the minimum. Bench-check at arm'
 - Rotation: next non-empty, non-expired slot every 5 s; `n/m` counts live slots.
   No live slots → line 2 blank.
 - Helper lost (`HostLink::present` false) → all slots cleared.
-- Exposes dirty flags for top bar and line 2 (feeds the screen model).
+- Exposes `topGen()` (slot 0 as shown) and `stripGen()` (line 2 card, n/m); each bumps only when its own content changes (feeds the screen model).
 
 ### 4.7 ScreenModel v2 (ui_layout.h)
 - State adds: 12 tile looks (label hash + type + anim level), clock text, slot-0 text,
@@ -178,7 +179,7 @@ top bar repaint. `TIME` → `DeckClock` → top bar once a minute.
 - Helper gone 3 s → cards cleared, helper dot grey, clock keeps running.
 - Port held by the helper during upload → pre-upload script releases it; if `hs` missing,
   upload fails as today and docs say: quit Hammerspoon or run `saucedeck.release()`.
-- Label missing/invalid in NVS v2 → entry loads with empty label → derived label shown.
+- Invalid label in an NVS v2 blob (fails `setLabel` validation) → whole blob rejected → defaults + "Key map reset" banner. (A v1 blob has no labels: entries load with empty labels → derived label shown.)
 
 ## 9. Power and hardware
 - No new parts, no pin changes. Backlight unchanged (19 mA on GPIO9, 1 mA margin, see
