@@ -15,6 +15,7 @@ struct SimLcdText {
   uint16_t fg;
   std::string s;
   bool customFont;  // printed with setFont(&FreeSans9pt7b) (legend tiles)
+  const void *font; // the GFXfont pointer passed to setFont (nullptr = built-in 5x7)
 };
 
 struct SimLcdRect {

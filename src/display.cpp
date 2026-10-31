@@ -98,6 +98,7 @@ static void drawTile(uint8_t i, const KeyEntry &e, uint8_t level, bool failed) {
   const TileLook look = tileLook(i, level, failed);
   tft.fillRoundRect(x, y, kTileW, kTileH, kTileR, look.fill);
   tft.fillRoundRect(x, y, kTileW, kBandH, kBandR, look.band);
+  tft.fillRect(x, y + kBandR - 1, kTileW, kBandH - kBandR + 1, look.band);  // square bottom corners
 
   char text[kLegendLineMax + 1];
   displayLabel(e, text, sizeof text);
@@ -172,7 +173,10 @@ static void drawMic(const ScreenState &s) {
     color = kThemeMicUnknown;
   }
   tft.fillRoundRect(kPillX, kPillY, kPillW, kPillH, kPillR, color);
-  printCentered(FreeSansBold9pt7b, advBold, buf, kPillX, kPillW, kPillBase, 0x0000);
+  // Bold 9pt up to 79 px (4 px margin each side); wider ("MIC 100%" = 86 px) -> regular 9pt.
+  const bool bold = textWidth(buf, advBold) <= kPillW - 8;
+  printCentered(bold ? FreeSansBold9pt7b : FreeSans9pt7b, bold ? advBold : advRegular, buf, kPillX, kPillW,
+                kPillBase, 0x0000);
 }
 
 static void drawSplash() {

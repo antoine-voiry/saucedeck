@@ -3,6 +3,8 @@
 #include <string.h>
 #include <unity.h>
 #include <vector>
+#include <Fonts/FreeSans9pt7b.h>
+#include <Fonts/FreeSansBold9pt7b.h>
 #include "frame.h"
 #include "keymap.h"
 #include "sim_deck.h"
@@ -392,6 +394,47 @@ SIM_TEST(test_mic_pill_text_and_colour) {
   TEST_ASSERT_TRUE(board().lcd.printedExact("MIC OFF"));
 }
 
+static const SimLcdText *textNamed(const char *s) {
+  for (const SimLcdText &t : board().lcd.texts)
+    if (t.s == s) return &t;
+  return nullptr;
+}
+
+static int16_t widthIn(const GFXfont &f, const char *s) {
+  int16_t w = 0;
+  for (const char *p = s; *p; p++) w += f.glyph[*p - f.first].xAdvance;
+  return w;
+}
+
+SIM_TEST(test_mic_100_falls_back_to_regular_font_and_fits_pill) {
+  SimDeck sim;
+  sim.boot();
+  sim.run(kAfterSplash);
+  hello();
+  sendLevel(MSG_MIC, 100, false);
+  clearRecords();
+  runWithHelper(sim, 100);
+  const SimLcdText *t = textNamed("MIC 100%");
+  TEST_ASSERT_NOT_NULL(t);
+  // Fonts are static per translation unit: identify by glyph advances, not by address.
+  const GFXfont *used = static_cast<const GFXfont *>(t->font);
+  TEST_ASSERT_NOT_NULL(used);
+  TEST_ASSERT_EQUAL_INT16(widthIn(FreeSans9pt7b, "MIC 100%"), widthIn(*used, "MIC 100%"));
+  TEST_ASSERT_NOT_EQUAL(widthIn(FreeSansBold9pt7b, "MIC 100%"), widthIn(*used, "MIC 100%"));
+  // Regular 9pt = 84 px in the 87 px pill: 4 px margin is unattainable, 1 px is the real margin.
+  TEST_ASSERT_TRUE(t->x >= 226 + 1);
+  TEST_ASSERT_TRUE(t->x + widthIn(FreeSans9pt7b, "MIC 100%") <= 226 + 87 - 1);
+}
+
+SIM_TEST(test_tile_band_has_square_bottom_corners) {
+  SimDeck sim;
+  sim.boot();
+  sim.run(kAfterSplash);
+  const uint16_t band = tileLook(0, 0, false).band;
+  TEST_ASSERT_EQUAL_HEX16(band, board().lcd.fb[tileY(1) + 4][tileX(1)]);
+  TEST_ASSERT_EQUAL_HEX16(band, board().lcd.fb[tileY(1) + 4][tileX(1) + 73]);
+}
+
 int main(int, char **) {
   UNITY_BEGIN();
   RUN_TEST(test_boot_shows_default_legends_f13_to_f24);
@@ -410,5 +453,7 @@ int main(int, char **) {
   RUN_TEST(test_volume_step_repaints_only_changed_segments);
   RUN_TEST(test_speaker_mute_greys_all_lit_segments);
   RUN_TEST(test_mic_pill_text_and_colour);
+  RUN_TEST(test_mic_100_falls_back_to_regular_font_and_fits_pill);
+  RUN_TEST(test_tile_band_has_square_bottom_corners);
   return UNITY_END();
 }

@@ -54,7 +54,7 @@ y240 └────────────────────────
   lines. 3 px left stripe in the type colour: Keystroke grey, App blue, Url green,
   Shortcut purple.
 - **Strip line 1:** horizontal volume bar (120 px) + percent, then mic text `MIC LIVE`,
-  `MIC MUTED` (red) or `MIC 45%` (helper present). Muted speaker = grey bar + red `MUTED`.
+  `MIC OFF` (red; regular 9pt font when the text is wider than 79 px, e.g. `MIC 100%`) or `MIC 45%` (helper present). Muted speaker = grey bar + red `OFF` (`100%` in the % box falls back to bold 9pt).
 - **Strip line 2:** rotating status card (icon glyph + text + `n/m` index). Any banner
   (`BANNER_*`, existing) takes this line over while active, then the card returns.
 - The old volume screen (vertical bar, speaker and mic icons) is removed.

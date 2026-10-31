@@ -598,7 +598,7 @@ void Adafruit_ST7789::fillCircle(int16_t x, int16_t y, int16_t r, uint16_t c) {
   circleFillHelper(x, y, r, 3, 0, c);
 }
 size_t Adafruit_ST7789::print(const char *s) {
-  board().lcd.texts.push_back({cx_, cy_, textSize_, fg_, s, font_ != nullptr});
+  board().lcd.texts.push_back({cx_, cy_, textSize_, fg_, s, font_ != nullptr, font_});
   // Adafruit_GFX::write(): cursor update and glyph placement (setTextWrap is not modelled).
   for (const char *p = s; *p; p++) {
     const unsigned char ch = static_cast<unsigned char>(*p);
