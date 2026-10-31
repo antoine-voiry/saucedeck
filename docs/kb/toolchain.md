@@ -44,3 +44,8 @@
   `src/idf_component.yml`; not reproducible (incremental, clean, without the file). Watch for it.
   [unverified cause]
 - **Firmware with Plan 1 (legend layout) + Plan 2 (status cards) + FreeSans9pt7b (2026-10-31) = 1218239 B = 38.7 % of the 3 MB huge_app slot.** `[verified: build output 2026-10-31]`
+
+## Hammerspoon helper (2026-10-31)
+
+- Hammerspoon 1.1.1 embeds Lua 5.4.7 (LuaSkin.framework strings). Host tests use Homebrew lua@5.4 (keg-only, /opt/homebrew/opt/lua@5.4/bin/lua); `lua` on PATH is 5.5. [verified: strings + lua -v, 2026-10-31]
+- `hs` CLI is at /opt/homebrew/bin/hs but answers only when the Hammerspoon config loads `hs.ipc` ("can't access Hammerspoon message port" otherwise). [verified: hs -c, 2026-10-31]
