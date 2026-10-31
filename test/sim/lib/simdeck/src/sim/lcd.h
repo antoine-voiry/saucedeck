@@ -1,9 +1,14 @@
 #pragma once
 #include <stdint.h>
+#include <stdio.h>
 #include <string>
 #include <vector>
 
-// ST7789 via the Adafruit API: records printed text and filled rects (no framebuffer).
+// ST7789 via the Adafruit API: records printed text and filled rects and rasterizes every
+// primitive into an RGB565 framebuffer (fb) so tests can write BMP screenshots.
+// Hardware assumptions: panel 320x240 landscape (rotation 3, as src/display.cpp sets it);
+// fb is indexed [y][x] in drawn coordinates; no rotation remap. Rasterizers are ports of
+// Adafruit GFX 1.12.x (BSD, Adafruit_GFX.cpp) so pixels match the real library.
 struct SimLcdText {
   int16_t x, y;
   uint8_t size;
@@ -25,6 +30,10 @@ struct SimLcd {
   uint32_t fills = 0;
   std::vector<SimLcdText> texts;
   std::vector<SimLcdRect> rects;  // every fillRect, in order
+  static constexpr int kW = 320, kH = 240;
+  uint16_t fb[kH][kW] = {};
+  // 24-bit BMP (RGB565 expanded to 8 bits per channel, rows bottom-up). False on I/O error.
+  bool saveBmp(const char *path) const;
   bool printed(const std::string &s) const {
     for (const SimLcdText &t : texts)
       if (t.s.find(s) != std::string::npos) return true;

@@ -31,6 +31,8 @@ class Adafruit_ST7789 {
   void setCursor(int16_t x, int16_t y) { cx_ = x; cy_ = y; }
   size_t print(const char *s);
   void fillCircle(int16_t x, int16_t y, int16_t r, uint16_t c);
+  int16_t getCursorX() const { return cx_; }
+  int16_t getCursorY() const { return cy_; }
   void setFont(const GFXfont *f = nullptr) { font_ = f; }
 
  private:

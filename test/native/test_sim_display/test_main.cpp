@@ -50,7 +50,9 @@ SIM_TEST(test_preset_labels_become_legends) {
   sim.boot();
   sim.run(kAfterSplash);
   TEST_ASSERT_TRUE(board().lcd.printed("Chrome"));
-  TEST_ASSERT_TRUE(board().lcd.printed("YouTube"));
+  // Real FreeSans9pt advances: "YouTube" is 73 px > the 71 px tile text, so it is cut to "YouTu...".
+  // (The old 10 px stand-in font made it fit; Plan 4's Candy legends fix long labels.)
+  TEST_ASSERT_TRUE(board().lcd.printed("YouTu"));
   TEST_ASSERT_TRUE(board().lcd.printed("Weather"));
   TEST_ASSERT_FALSE(board().lcd.printed("F14"));
 }

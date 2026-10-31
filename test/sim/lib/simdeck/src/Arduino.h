@@ -8,6 +8,9 @@
 #include <stdlib.h>
 #include <string.h>
 #include <string>
+#ifndef PROGMEM
+#define PROGMEM  // sim: flash-resident data is plain memory
+#endif
 #include "esp_err.h"
 #include "esp_system.h"
 
