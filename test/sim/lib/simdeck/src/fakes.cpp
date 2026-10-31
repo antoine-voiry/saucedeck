@@ -350,7 +350,10 @@ void Adafruit_ST7789::setRotation(uint8_t r) { board().lcd.rotation = r; }
 void Adafruit_ST7789::setTextWrap(bool) {}
 void Adafruit_ST7789::enableSleep(bool on) { board().lcd.asleep = on; }
 void Adafruit_ST7789::fillScreen(uint16_t) { board().lcd.fills++; }
-void Adafruit_ST7789::fillRect(int16_t, int16_t, int16_t, int16_t, uint16_t) { board().lcd.fills++; }
+void Adafruit_ST7789::fillRect(int16_t x, int16_t y, int16_t w, int16_t h, uint16_t c) {
+  board().lcd.fills++;
+  board().lcd.rects.push_back({x, y, w, h, c});
+}
 void Adafruit_ST7789::drawRect(int16_t, int16_t, int16_t, int16_t, uint16_t) {}
 void Adafruit_ST7789::fillRoundRect(int16_t, int16_t, int16_t, int16_t, int16_t, uint16_t) {}
 void Adafruit_ST7789::fillTriangle(int16_t, int16_t, int16_t, int16_t, int16_t, int16_t, uint16_t) {}

@@ -36,9 +36,12 @@ bool SimDeck::loadPresetIntoNvs(const char *path) {
   KeyMap m;
   size_t pos = s.find("\"keys\"");
   for (uint8_t i = 0; i < kKeyCount; i++) {
-    std::string type, value;
-    if (!nextField(s, pos, "type", type) || !nextField(s, pos, "value", value)) return false;
+    std::string label, type, value;  // presets list label, type, value per key
+    if (!nextField(s, pos, "label", label) || !nextField(s, pos, "type", type) ||
+        !nextField(s, pos, "value", value))
+      return false;
     if (m.setFromStrings(i, type.c_str(), value.c_str()) != KeyMapError::None) return false;
+    if (m.setLabel(i, label.c_str()) != KeyMapError::None) return false;
   }
   uint8_t blob[kKeyMapBlobMax];
   size_t len = serializeKeyMap(m, blob, sizeof blob);
