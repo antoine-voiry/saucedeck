@@ -165,6 +165,6 @@ inline SegSpan segDelta(uint8_t oldLit, uint8_t newLit) {
 
 // Centre x of dot k of count (count <= 7): 9 px pitch, right aligned, last centre 313
 // (5 px dot spans 311..315, inside the 316 limit).
-inline uint8_t cardDotX(uint8_t k, uint8_t count) {
-  return static_cast<uint8_t>(313 - (count - 1 - k) * 9);
+inline int16_t cardDotX(uint8_t k, uint8_t count) {
+  return static_cast<int16_t>(313 - (count - 1 - k) * 9);
 }

@@ -184,10 +184,14 @@ void test_seg_delta() {
 // --- card dots ---
 
 void test_card_dot_x() {
-  TEST_ASSERT_EQUAL_UINT8(313, cardDotX(0, 1));
-  TEST_ASSERT_EQUAL_UINT8(259, cardDotX(0, 7));
-  TEST_ASSERT_EQUAL_UINT8(313, cardDotX(6, 7));
-  TEST_ASSERT_EQUAL_UINT8(9, cardDotX(1, 7) - cardDotX(0, 7));
+  TEST_ASSERT_EQUAL_INT(313, cardDotX(0, 1));
+  TEST_ASSERT_EQUAL_INT(259, cardDotX(0, 7));
+  TEST_ASSERT_EQUAL_INT(313, cardDotX(6, 7));
+  TEST_ASSERT_EQUAL_INT(9, cardDotX(1, 7) - cardDotX(0, 7));
+  for (uint8_t n = 1; n <= 7; n++)  // up to 7 rotating cards
+    for (uint8_t k = 0; k < n; k++) {
+      TEST_ASSERT_TRUE(cardDotX(k, n) + 2 <= 316);  // 5 px dot: centre +- 2
+    }
 }
 
 int main() {
