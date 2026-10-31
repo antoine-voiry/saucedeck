@@ -29,7 +29,9 @@ struct SimLcd {
   uint32_t spiHz = 0;
   uint32_t fills = 0;
   std::vector<SimLcdText> texts;
-  std::vector<SimLcdRect> rects;  // every fillRect, in order
+  std::vector<SimLcdRect> rects;    // every fillRect, in order
+  std::vector<SimLcdRect> rounds;   // every fillRoundRect (bounding box), in order
+  std::vector<SimLcdRect> circles;  // every fillCircle: x, y = centre, w = h = radius
   static constexpr int kW = 320, kH = 240;
   uint16_t fb[kH][kW] = {};
   // 24-bit BMP (RGB565 expanded to 8 bits per channel, rows bottom-up). False on I/O error.
@@ -37,6 +39,11 @@ struct SimLcd {
   bool printed(const std::string &s) const {
     for (const SimLcdText &t : texts)
       if (t.s.find(s) != std::string::npos) return true;
+    return false;
+  }
+  bool printedExact(const std::string &s) const {
+    for (const SimLcdText &t : texts)
+      if (t.s == s) return true;
     return false;
   }
 };

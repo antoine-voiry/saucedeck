@@ -10,6 +10,7 @@
 #include "frame.h"
 #include "sim_deck.h"
 #include "sim_test.h"
+#include "theme.h"
 
 void setUp() {}
 void tearDown() {}
@@ -208,10 +209,20 @@ SIM_TEST(test_screenshot_of_real_display) {
   const uint8_t vol[2] = {65, 0}, mic[2] = {70, 0};
   sendMsg(MSG_VOLUME, vol, 2);
   sendMsg(MSG_MIC, mic, 2);
-  const char *txt = "Daft Punk - One More Time";
-  uint8_t p[5 + 48] = {1, 1, 0, 0, static_cast<uint8_t>(strlen(txt))};
-  memcpy(p + 5, txt, strlen(txt));
-  sendMsg(MSG_CARD, p, static_cast<uint8_t>(5 + strlen(txt)));
+  // Same content as the mockup (tools/lcd_mock.py): 14:32, slot 0 "Standup 15:00", 3 strip cards.
+  const uint32_t epoch = 20000u * 86400u + 14 * 3600 + 32 * 60;  // 14:32 UTC, tz 0
+  const uint8_t tm[6] = {static_cast<uint8_t>(epoch), static_cast<uint8_t>(epoch >> 8),
+                         static_cast<uint8_t>(epoch >> 16), static_cast<uint8_t>(epoch >> 24), 0, 0};
+  sendMsg(MSG_TIME, tm, 6);
+  const struct {
+    uint8_t slot, icon;
+    const char *txt;
+  } cards[] = {{0, 2, "Standup 15:00"}, {1, 1, "Daft Punk - One More Time"}, {2, 3, "CPU 12%"}, {3, 4, "12 C"}};
+  for (const auto &c : cards) {
+    uint8_t p[5 + 48] = {c.slot, c.icon, 0, 0, static_cast<uint8_t>(strlen(c.txt))};
+    memcpy(p + 5, c.txt, strlen(c.txt));
+    sendMsg(MSG_CARD, p, static_cast<uint8_t>(5 + strlen(c.txt)));
+  }
   runWithHelper(sim, 1700);  // past the splash
   sim.press(7);
   sim.run(60);  // mid-fade: > 25 ms debounce, fade not finished
@@ -223,11 +234,11 @@ SIM_TEST(test_screenshot_of_real_display) {
   struct stat st;
   TEST_ASSERT_EQUAL(0, stat(path, &st));
   TEST_ASSERT_EQUAL(54 + 320 * 240 * 3, st.st_size);
-  // Not a blank/black screen: tiles and text put plenty of non-background pixels on it.
+  // Not a blank screen: tiles and text put plenty of non-background (kThemeBg) pixels on it.
   int lit = 0;
   for (int y = 0; y < 240; y++)
     for (int x = 0; x < 320; x++)
-      if (px(x, y) != kBlack) lit++;
+      if (px(x, y) != kThemeBg) lit++;
   TEST_ASSERT_GREATER_THAN(2000, lit);
 }
 

@@ -1,4 +1,5 @@
 // Display scenarios: the real src/ firmware drawing legends and press feedback on the sim LCD.
+#include <stdlib.h>
 #include <string.h>
 #include <unity.h>
 #include <vector>
@@ -7,6 +8,7 @@
 #include "sim_deck.h"
 #include "sim_test.h"
 #include "status_board.h"
+#include "theme.h"
 
 void setUp() {}
 void tearDown() {}
@@ -14,22 +16,36 @@ void tearDown() {}
 static constexpr uint32_t kAfterSplash = 1600;  // splash 1500 ms (src/display.cpp)
 static constexpr uint32_t kSettle = 30;         // > 25 ms debounce
 
-// Tile body of key position pos (1..12): src/display.cpp drawTile.
+// Tile of key position pos (1..12): Candy geometry (src/display.cpp drawTile, plan 4 Global Constraints).
+static int16_t tileX(uint8_t pos) { return ((pos - 1) % 4) * 80 + 3; }
+static int16_t tileY(uint8_t pos) { return 24 + ((pos - 1) / 4) * 54; }
+
 static bool isBody(const SimLcdRect &r, uint8_t pos) {
-  const int16_t i = pos - 1, x = (i % 4) * 80, y = 20 + (i / 4) * 56;
-  return r.x == x + 1 && r.y == y + 1 && r.w == 78 && r.h == 54;
+  return r.x == tileX(pos) && r.y == tileY(pos) && r.w == 74 && r.h == 50;
 }
 
 static bool insideTile(const SimLcdRect &r, uint8_t pos) {
-  const int16_t i = pos - 1, x = (i % 4) * 80, y = 20 + (i / 4) * 56;
-  return r.x >= x && r.y >= y && r.x + r.w <= x + 80 && r.y + r.h <= y + 56;
+  return r.x >= tileX(pos) && r.y >= tileY(pos) && r.x + r.w <= tileX(pos) + 74 && r.y + r.h <= tileY(pos) + 50;
+}
+
+static bool circleInsideTile(const SimLcdRect &c, uint8_t pos) {
+  return insideTile({static_cast<int16_t>(c.x - c.w), static_cast<int16_t>(c.y - c.w), static_cast<int16_t>(2 * c.w + 1),
+                     static_cast<int16_t>(2 * c.w + 1), c.c},
+                    pos);
 }
 
 static std::vector<SimLcdRect> bodies(uint8_t pos) {
   std::vector<SimLcdRect> out;
-  for (const SimLcdRect &r : board().lcd.rects)
+  for (const SimLcdRect &r : board().lcd.rounds)
     if (isBody(r, pos)) out.push_back(r);
   return out;
+}
+
+static void clearRecords() {
+  board().lcd.texts.clear();
+  board().lcd.rects.clear();
+  board().lcd.rounds.clear();
+  board().lcd.circles.clear();
 }
 
 SIM_TEST(test_boot_shows_default_legends_f13_to_f24) {
@@ -41,7 +57,7 @@ SIM_TEST(test_boot_shows_default_legends_f13_to_f24) {
     snprintf(t, sizeof t, "F%u", k);
     TEST_ASSERT_TRUE_MESSAGE(board().lcd.printed(t), t);
   }
-  TEST_ASSERT_TRUE(board().lcd.printed("MIC LIVE"));
+  TEST_ASSERT_TRUE(board().lcd.printedExact("MIC LIVE"));
 }
 
 SIM_TEST(test_preset_labels_become_legends) {
@@ -50,10 +66,12 @@ SIM_TEST(test_preset_labels_become_legends) {
   sim.boot();
   sim.run(kAfterSplash);
   TEST_ASSERT_TRUE(board().lcd.printed("Chrome"));
-  // Real FreeSans9pt advances: "YouTube" is 73 px > the 71 px tile text, so it is cut to "YouTu...".
-  // (The old 10 px stand-in font made it fit; Plan 4's Candy legends fix long labels.)
-  TEST_ASSERT_TRUE(board().lcd.printed("YouTu"));
-  TEST_ASSERT_TRUE(board().lcd.printed("Weather"));
+  // chooseLegend, 68 px: "YouTube" is 78 px bold, 73 px regular, no space -> balanced bold halves.
+  TEST_ASSERT_TRUE(board().lcd.printedExact("You"));
+  TEST_ASSERT_TRUE(board().lcd.printedExact("Tube"));
+  TEST_ASSERT_TRUE(board().lcd.printedExact("Weather"));  // 68 px regular: one line
+  TEST_ASSERT_TRUE(board().lcd.printedExact("Hide"));     // "Hide app": split at the space
+  TEST_ASSERT_TRUE(board().lcd.printedExact("app"));
   TEST_ASSERT_FALSE(board().lcd.printed("F14"));
 }
 
@@ -61,11 +79,37 @@ SIM_TEST(test_key_press_repaints_only_its_tile) {
   SimDeck sim;
   sim.boot();
   sim.run(kAfterSplash);
-  board().lcd.rects.clear();
-  sim.press(6);
+  clearRecords();
+  sim.press(7);
   sim.run(kSettle + 40);
-  TEST_ASSERT_FALSE(board().lcd.rects.empty());
-  for (const SimLcdRect &r : board().lcd.rects) TEST_ASSERT_TRUE(insideTile(r, 6));
+  TEST_ASSERT_FALSE(board().lcd.rounds.empty());
+  for (const SimLcdRect &r : board().lcd.rects) TEST_ASSERT_TRUE(insideTile(r, 7));
+  for (const SimLcdRect &r : board().lcd.rounds) TEST_ASSERT_TRUE(insideTile(r, 7));
+  for (const SimLcdRect &c : board().lcd.circles) TEST_ASSERT_TRUE(circleInsideTile(c, 7));
+  for (const SimLcdText &t : board().lcd.texts) {
+    TEST_ASSERT_TRUE(t.x >= tileX(7) && t.x < tileX(7) + 74);
+    TEST_ASSERT_TRUE(t.y > tileY(7) && t.y < tileY(7) + 50);
+  }
+  // Rounded body (radius 8) then the hue band (x, y, 74, 5) in key 7's colour.
+  TEST_ASSERT_EQUAL_HEX16(tileLook(6, TileAnim::kFull, false).fill, bodies(7).back().c);
+  const SimLcdRect &band = board().lcd.rounds.back();
+  TEST_ASSERT_EQUAL(tileX(7), band.x);
+  TEST_ASSERT_EQUAL(tileY(7), band.y);
+  TEST_ASSERT_EQUAL(74, band.w);
+  TEST_ASSERT_EQUAL(5, band.h);
+  TEST_ASSERT_EQUAL_HEX16(kKeyHues[6], band.c);
+  // Corner pixel of the rounded tile keeps the background colour.
+  TEST_ASSERT_EQUAL_HEX16(kThemeBg, board().lcd.fb[tileY(7)][tileX(7)]);
+}
+
+SIM_TEST(test_idle_tiles_use_key_hues) {
+  SimDeck sim;
+  sim.boot();
+  sim.run(kAfterSplash);
+  for (uint8_t pos = 1; pos <= 12; pos++) {
+    TEST_ASSERT_FALSE(bodies(pos).empty());
+    TEST_ASSERT_EQUAL_HEX16(tileLook(pos - 1, 0, false).fill, bodies(pos).back().c);
+  }
 }
 
 SIM_TEST(test_release_fades_back_to_idle_in_four_repaints) {
@@ -76,7 +120,7 @@ SIM_TEST(test_release_fades_back_to_idle_in_four_repaints) {
   sim.press(6);
   sim.run(kSettle + 40);
   TEST_ASSERT_NOT_EQUAL(idle, bodies(6).back().c);
-  board().lcd.rects.clear();
+  clearRecords();
   sim.release(6);
   sim.run(kSettle + 300);
   std::vector<SimLcdRect> fade = bodies(6);
@@ -95,7 +139,7 @@ SIM_TEST(test_app_key_without_helper_flashes_orange) {
   sim.run(kAfterSplash);
   sim.press(1);
   sim.run(kSettle + 40);
-  TEST_ASSERT_EQUAL_HEX16(0xFD20, bodies(1).back().c);  // kOrange, src/display.cpp
+  TEST_ASSERT_EQUAL_HEX16(kThemeFailed, bodies(1).back().c);  // amber, theme.h
   TEST_ASSERT_TRUE(board().lcd.printed("helper not running"));
 }
 
@@ -139,9 +183,26 @@ static void runWithHelper(SimDeck &sim, uint32_t ms) {
   }
 }
 
+static void sendLevel(uint8_t type, uint8_t pct, bool muted) {
+  const uint8_t p[2] = {pct, static_cast<uint8_t>(muted)};
+  sendMsg(type, p, 2);
+}
+
+// Card dots on line 2 (y 224, radius 2): returns how many; current must be the white one.
+static size_t cardDots(uint8_t current) {
+  std::vector<SimLcdRect> dots;
+  for (const SimLcdRect &c : board().lcd.circles)
+    if (c.y == 224 && c.w == 2) dots.push_back(c);
+  for (size_t k = 0; k < dots.size(); k++) {
+    TEST_ASSERT_EQUAL(cardDotX(k, dots.size()), dots[k].x);
+    TEST_ASSERT_EQUAL_HEX16(k + 1 == current ? 0xFFFF : kThemeSegOff, dots[k].c);
+  }
+  return dots.size();
+}
+
 static bool line2Cleared() {
   for (const SimLcdRect &r : board().lcd.rects)
-    if (r.x == 0 && r.y == 214 && r.w == 320 && r.h == 26) return true;
+    if (r.x == 0 && r.y == 214 && r.w == 320 && r.h == 26 && r.c == kThemeBar) return true;
   return false;
 }
 
@@ -172,11 +233,15 @@ SIM_TEST(test_cards_rotate_with_index) {
   sendCard(3, 3, "CPU 12%");
   runWithHelper(sim, kAfterSplash);
   TEST_ASSERT_TRUE(board().lcd.printed("Daft Punk"));
-  TEST_ASSERT_TRUE(board().lcd.printed("1/2"));
-  board().lcd.texts.clear();
+  TEST_ASSERT_EQUAL(2, cardDots(1));
+  clearRecords();
   runWithHelper(sim, StatusBoard::kRotateMs);
   TEST_ASSERT_TRUE(board().lcd.printed("CPU 12%"));
-  TEST_ASSERT_TRUE(board().lcd.printed("2/2"));
+  TEST_ASSERT_EQUAL(2, cardDots(2));
+  // Rotation repaints line 2 only (y 214..239).
+  for (const SimLcdRect &r : board().lcd.rects) TEST_ASSERT_TRUE(r.y >= 214);
+  for (const SimLcdRect &r : board().lcd.rounds) TEST_ASSERT_TRUE(r.y >= 214);
+  for (const SimLcdRect &c : board().lcd.circles) TEST_ASSERT_TRUE(c.y - c.w >= 214);
 }
 
 SIM_TEST(test_helper_silence_clears_cards) {
@@ -219,7 +284,112 @@ SIM_TEST(test_bad_card_frame_is_ignored) {
   sendMsg(MSG_CARD, p, sizeof p);
   runWithHelper(sim, kAfterSplash);
   TEST_ASSERT_TRUE(board().lcd.printed("ok"));
-  TEST_ASSERT_TRUE(board().lcd.printed("1/1"));
+  TEST_ASSERT_EQUAL(1, cardDots(1));
+}
+
+SIM_TEST(test_seven_cards_seven_dots_text_clear_of_dots) {
+  SimDeck sim;
+  sim.boot();
+  hello();
+  const char *t = "Daft Punk - One More Time (Radio Edit) 2001";
+  for (uint8_t slot = 1; slot <= 7; slot++) sendCard(slot, slot, t);
+  runWithHelper(sim, kAfterSplash);
+  TEST_ASSERT_EQUAL(7, cardDots(1));
+  // Card text (FreeSans9pt, x 34) ends >= 4 px before the first dot's left edge.
+  const int16_t firstDotLeft = cardDotX(0, 7) - 2;
+  bool seen = false;
+  for (const SimLcdText &tx : board().lcd.texts)
+    if (tx.x == 34 && tx.y == 231) {
+      seen = true;
+      int16_t right = 0;  // rightmost white pixel that is not the current (white) dot 0
+      for (int y = 214; y < 240; y++)
+        for (int x = 34; x < 320; x++) {
+          const bool dot0 = abs(x - cardDotX(0, 7)) <= 2 && abs(y - 224) <= 2;
+          if (board().lcd.fb[y][x] == 0xFFFF && !dot0 && x > right) right = x;
+        }
+      TEST_ASSERT_TRUE(right + 4 < firstDotLeft);
+      TEST_ASSERT_TRUE(tx.s.find("...") != std::string::npos);
+    }
+  TEST_ASSERT_TRUE(seen);
+}
+
+SIM_TEST(test_volume_step_repaints_only_changed_segments) {
+  SimDeck sim;
+  sim.boot();
+  hello();
+  sendLevel(MSG_VOLUME, 50, false);
+  runWithHelper(sim, kAfterSplash);
+  TEST_ASSERT_TRUE(board().lcd.printedExact("50%"));
+  clearRecords();
+  sendLevel(MSG_VOLUME, 55, false);  // 10 -> 11 lit segments
+  runWithHelper(sim, 100);
+  TEST_ASSERT_TRUE(board().lcd.printedExact("55%"));
+  TEST_ASSERT_EQUAL(1, board().lcd.rounds.size());
+  const SimLcdRect &seg = board().lcd.rounds[0];
+  TEST_ASSERT_EQUAL(8 + 10 * 8, seg.x);
+  TEST_ASSERT_EQUAL(194, seg.y);
+  TEST_ASSERT_EQUAL(6, seg.w);
+  TEST_ASSERT_EQUAL(15, seg.h);
+  TEST_ASSERT_EQUAL_HEX16(segmentColor(10, false), seg.c);
+  // Only the % text box is cleared (custom font, no background).
+  TEST_ASSERT_EQUAL(1, board().lcd.rects.size());
+  const SimLcdRect &box = board().lcd.rects[0];
+  TEST_ASSERT_EQUAL(172, box.x);
+  TEST_ASSERT_EQUAL(190, box.y);
+  TEST_ASSERT_EQUAL(51, box.w);
+  TEST_ASSERT_EQUAL(22, box.h);
+  TEST_ASSERT_EQUAL_HEX16(kThemeBar, box.c);
+  TEST_ASSERT_TRUE(board().lcd.circles.empty());
+  // Step down: 11 -> 10, segment 10 goes back to off.
+  clearRecords();
+  sendLevel(MSG_VOLUME, 50, false);
+  runWithHelper(sim, 100);
+  TEST_ASSERT_EQUAL(1, board().lcd.rounds.size());
+  TEST_ASSERT_EQUAL_HEX16(kThemeSegOff, board().lcd.rounds[0].c);
+}
+
+SIM_TEST(test_speaker_mute_greys_all_lit_segments) {
+  SimDeck sim;
+  sim.boot();
+  hello();
+  sendLevel(MSG_VOLUME, 50, false);
+  runWithHelper(sim, kAfterSplash);
+  clearRecords();
+  sendLevel(MSG_VOLUME, 50, true);
+  runWithHelper(sim, 100);
+  TEST_ASSERT_EQUAL(kVolSegments, board().lcd.rounds.size());
+  TEST_ASSERT_EQUAL_HEX16(kThemeMutedSeg, board().lcd.rounds[0].c);
+  TEST_ASSERT_EQUAL_HEX16(kThemeSegOff, board().lcd.rounds[10].c);
+  TEST_ASSERT_TRUE(board().lcd.printedExact("OFF"));
+}
+
+static const SimLcdRect *micPill() {
+  const SimLcdRect *pill = nullptr;
+  for (const SimLcdRect &r : board().lcd.rounds)
+    if (r.x == 226 && r.y == 193 && r.w == 87 && r.h == 17) pill = &r;
+  return pill;
+}
+
+SIM_TEST(test_mic_pill_text_and_colour) {
+  SimDeck sim;
+  sim.boot();
+  sim.run(kAfterSplash);
+  TEST_ASSERT_NOT_NULL(micPill());
+  TEST_ASSERT_EQUAL_HEX16(kThemeMicUnknown, micPill()->c);
+  TEST_ASSERT_TRUE(board().lcd.printedExact("MIC LIVE"));
+  hello();
+  sendLevel(MSG_MIC, 70, false);
+  clearRecords();
+  runWithHelper(sim, 100);
+  TEST_ASSERT_NOT_NULL(micPill());
+  TEST_ASSERT_EQUAL_HEX16(kThemeMicLive, micPill()->c);
+  TEST_ASSERT_TRUE(board().lcd.printedExact("MIC 70%"));
+  sendLevel(MSG_MIC, 70, true);
+  clearRecords();
+  runWithHelper(sim, 100);
+  TEST_ASSERT_NOT_NULL(micPill());
+  TEST_ASSERT_EQUAL_HEX16(kThemeMicMuted, micPill()->c);
+  TEST_ASSERT_TRUE(board().lcd.printedExact("MIC OFF"));
 }
 
 int main(int, char **) {
@@ -235,5 +405,10 @@ int main(int, char **) {
   RUN_TEST(test_helper_silence_clears_cards);
   RUN_TEST(test_banner_takes_line2_then_card_returns);
   RUN_TEST(test_bad_card_frame_is_ignored);
+  RUN_TEST(test_idle_tiles_use_key_hues);
+  RUN_TEST(test_seven_cards_seven_dots_text_clear_of_dots);
+  RUN_TEST(test_volume_step_repaints_only_changed_segments);
+  RUN_TEST(test_speaker_mute_greys_all_lit_segments);
+  RUN_TEST(test_mic_pill_text_and_colour);
   return UNITY_END();
 }

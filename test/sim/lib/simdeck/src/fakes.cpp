@@ -575,6 +575,7 @@ void Adafruit_ST7789::drawRect(int16_t x, int16_t y, int16_t w, int16_t h, uint1
   vLine(x + w - 1, y, h, c);
 }
 void Adafruit_ST7789::fillRoundRect(int16_t x, int16_t y, int16_t w, int16_t h, int16_t r, uint16_t c) {
+  board().lcd.rounds.push_back({x, y, w, h, c});
   const int16_t maxR = (w < h ? w : h) / 2;
   if (r > maxR) r = maxR;
   rectFill(x + r, y, w - 2 * r, h, c);
@@ -592,6 +593,7 @@ void Adafruit_ST7789::drawCircleHelper(int16_t x, int16_t y, int16_t r, uint8_t 
   circleHelper(x, y, r, corner, c);
 }
 void Adafruit_ST7789::fillCircle(int16_t x, int16_t y, int16_t r, uint16_t c) {
+  board().lcd.circles.push_back({x, y, r, r, c});
   vLine(x, y - r, 2 * r + 1, c);
   circleFillHelper(x, y, r, 3, 0, c);
 }

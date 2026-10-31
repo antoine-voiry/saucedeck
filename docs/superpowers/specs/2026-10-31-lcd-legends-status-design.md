@@ -28,6 +28,12 @@ animation, Windows, non-ASCII text on the LCD.
 
 ## 3. Screen map (320×240 landscape, rotation 3)
 
+> **Look superseded by Plan 4 "Candy" theme (2026-10-31):** per-key hue tiles (rounded,
+> 74×50, hue band on top), segmented gradient volume bar, mic pill, card dots instead of
+> `n/m`. Exact colours and geometry: [Plan 4 Global Constraints](../plans/2026-10-31-lcd-theme-candy-plan4.md);
+> mockup `assets/2026-10-31-candy-mockup.png`, sim render `assets/2026-10-31-candy-sim.png`.
+> The map below stays valid for regions and repaint scopes.
+
 ```
 y0   ┌ 14:32  Standup in 12m            ●H ●W ┐ top bar, 20 px
 y20  ├────────┬────────┬────────┬────────┤
@@ -122,6 +128,12 @@ small; FreeSans9pt (~12 px cap-to-descender) is the minimum. Bench-check at arm'
   `STRIP_MIC`, `STRIP_LINE2`, `ALL`.
 - Banner and card share line 2: banner wins while `banner != BANNER_NONE`.
 - Horizontal bar keeps the existing partial-strip idea (`barDelta` along x instead of y).
+
+### 4.8 Theme (theme.h, Plan 4)
+- Candy colours (`kTheme*`, `kKeyHues`), `tileLook` (idle tint → full hue by press level),
+  `chooseLegend` (bold/regular, 1–2 lines, 68 px), 20 volume segments (`litSegments`,
+  `segmentColor`, `segDelta`), `cardDotX`. Volume repaint = changed segments only.
+  Spec: [Plan 4](../plans/2026-10-31-lcd-theme-candy-plan4.md).
 
 ## 5. src/ glue
 - `display.cpp`: rewrite of the layout; draws from ScreenModel v2 dirty flags only. Adds

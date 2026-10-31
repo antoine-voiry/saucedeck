@@ -4,10 +4,13 @@
 #include <Adafruit_GFX.h>
 #include <Adafruit_ST7789.h>
 #include <Fonts/FreeSans9pt7b.h>
+#include <Fonts/FreeSansBold12pt7b.h>
+#include <Fonts/FreeSansBold9pt7b.h>
 #include "driver/gpio.h"
 #include "deck_clock.h"
 #include "legend.h"
 #include "pins.h"
+#include "theme.h"
 
 // 240x320 panel, landscape. 1 was upside down in the case (bench 2026-10-18) -> 3.
 static constexpr uint8_t kRotation = 3;
@@ -15,38 +18,41 @@ static constexpr uint32_t kSpiHz = 20000000;  // bench-verified (docs/kb/periphe
 static constexpr uint32_t kSplashMs = 1500;
 static constexpr uint32_t kMinFrameMs = 30;  // batch fast knob turns into one redraw
 
-// Layout (landscape 320x240): top bar, 4x3 legend grid (key positions 1-12, row-major),
-// status strip with two lines. Spec: docs/superpowers/specs/2026-10-31-lcd-legends-status-design.md
+// "Candy" layout (landscape 320x240): top bar, 4x3 rounded tiles (key positions 1-12,
+// row-major), status strip (volume segments, %, mic pill; card line). Colours and geometry:
+// docs/superpowers/plans/2026-10-31-lcd-theme-candy-plan4.md (Global Constraints).
 static constexpr int16_t kW = 320;
-static constexpr int16_t kTopH = 20;
-static constexpr int16_t kTileW = 80, kTileH = 56, kGridY = kTopH;  // grid y 20..187
-static constexpr int16_t kStripeW = 3, kLabelPad = 3;
-static constexpr int16_t kTextW = kTileW - kStripeW - 2 * kLabelPad;  // 71 px per label line
-static constexpr int16_t kLine1Y = 190, kLine2Y = 214, kLine2H = 26;
-static constexpr int16_t kBarX = 4, kBarW = 120, kBarH = 18;  // outline; interior 1 px inside
-static constexpr int16_t kPctX = 132, kMicX = 204;
-static constexpr int16_t kTopTextX = 72, kTopTextW = 212;          // slot 0 text, up to the dots
-static constexpr int16_t kCardTextX = 28, kCardTextW = 248, kIdxX = 280;
+static constexpr int16_t kTopH = 22;
+static constexpr int16_t kTileX0 = 3, kTileY0 = 24, kTilePitchX = 80, kTilePitchY = 54;
+static constexpr int16_t kTileW = 74, kTileH = 50, kTileR = 8, kBandH = 5, kBandR = 3;
+static constexpr uint16_t kLabelW = 68;
+static constexpr int16_t kStripY = 188;
+static constexpr int16_t kSegX = 8, kSegPitch = 8, kSegY = 194, kSegW = 6, kSegH = 15, kSegR = 2;
+static constexpr int16_t kPctX = 172, kPctBase = 208, kPctBoxY = 190, kPctBoxW = 51, kPctBoxH = 22;
+static constexpr int16_t kPillX = 226, kPillY = 193, kPillW = 87, kPillH = 17, kPillR = 8, kPillBase = 206;
+static constexpr int16_t kLine2Y = 214, kLine2H = 26, kLine2Base = 231;
+static constexpr int16_t kIconX = 8, kIconY = 216, kIconS = 18, kIconR = 5;
+static constexpr int16_t kCardTextX = 34, kCardTextMaxW = 248, kDotY = 224, kDotR = 2;
+static constexpr uint8_t kMaxDots = 7;
+static constexpr int16_t kTopTextX = 76, kTopTextW = 208;  // slot 0 text, up to x 284
 
-static constexpr uint16_t kBg = ST77XX_BLACK;
-static constexpr uint16_t kFg = ST77XX_WHITE;
-static constexpr uint16_t kTileBg = 0x2104;  // dark grey
-static constexpr uint16_t kBarOn = ST77XX_CYAN;
-static constexpr uint16_t kGrey = 0x4208;
-static constexpr uint16_t kRed = ST77XX_RED;
-static constexpr uint16_t kGreen = 0x07E0;
-static constexpr uint16_t kBlue = 0x041F;
-static constexpr uint16_t kPurple = 0xA01F;
-static constexpr uint16_t kOrange = 0xFD20;  // failed press (helper not running)
+static constexpr uint16_t kWhite = 0xFFFF;
+static constexpr uint16_t kApplyYellow = rgb565(0xFF, 0xD6, 0x0A);
 
-// CARD icon ids (spec 4.4): coloured box with a letter. 0 = none.
+// CARD icon ids (spec 4.4): rounded box with a white letter. 0 = none.
 struct CardIcon {
   uint16_t color;
   char letter;
 };
 static const CardIcon kIcons[kCardIcons] = {
-    {kBg, ' '},     {kPurple, 'M'}, {kBlue, 'C'},  {kGreen, '%'},
-    {0xFFE0, 'W'},  {kOrange, '@'}, {0x07FF, 'T'}, {kGreen, 'B'},
+    {kThemeBar, ' '},
+    {rgb565(0xAF, 0x52, 0xDE), 'M'},  // music
+    {rgb565(0x0A, 0x84, 0xFF), 'C'},  // calendar
+    {rgb565(0x30, 0xD1, 0x58), '%'},  // cpu
+    {rgb565(0xFF, 0xB0, 0x00), 'W'},  // weather
+    {rgb565(0xFF, 0x7A, 0x00), '@'},  // mail
+    {rgb565(0x2A, 0xAB, 0xEE), 'T'},  // chat
+    {rgb565(0x34, 0xC7, 0x59), 'B'},  // battery
 };
 
 static Adafruit_ST7789 tft(&SPI, TFT_CS_PIN, TFT_DC_PIN, TFT_RST_PIN);
@@ -55,122 +61,129 @@ static uint32_t splashUntil = 0;
 static uint32_t lastFrame = 0;
 static bool splashing = true;
 
-static uint16_t typeColor(KeyType t) {
-  switch (t) {
-    case KeyType::Keystroke: return 0x7BEF;  // grey
-    case KeyType::App: return kBlue;
-    case KeyType::Url: return kGreen;
-    case KeyType::Shortcut: return kPurple;
-  }
-  return kGrey;
-}
-
-static uint8_t glyphAdvance(char c) {
+static uint8_t advance(const GFXfont &f, char c) {
   uint8_t u = static_cast<uint8_t>(c);
-  if (u < FreeSans9pt7b.first || u > FreeSans9pt7b.last) return 0;
-  return FreeSans9pt7b.glyph[u - FreeSans9pt7b.first].xAdvance;
+  if (u < f.first || u > f.last) return 0;
+  return f.glyph[u - f.first].xAdvance;
 }
+static uint8_t advRegular(char c) { return advance(FreeSans9pt7b, c); }
+static uint8_t advBold(char c) { return advance(FreeSansBold9pt7b, c); }
+static uint8_t advBig(char c) { return advance(FreeSansBold12pt7b, c); }
 
-static void printCentered(const char *s, int16_t x0, int16_t w, int16_t baseline) {
+static int16_t textWidth(const char *s, GlyphWidthFn w) {
   int16_t px = 0;
-  for (const char *p = s; *p; p++) px += glyphAdvance(*p);
-  tft.setCursor(x0 + (w - px) / 2, baseline);
-  tft.print(s);
+  for (const char *p = s; *p; p++) px += w(*p);
+  return px;
 }
 
-// Tile i = key position i + 1. Fill blends from the idle grey to the accent by the press
-// level; custom fonts draw no background, so the fill always goes first.
-static void drawTile(uint8_t i, const KeyEntry &e, uint8_t level, bool failed) {
-  const int16_t x = (i % 4) * kTileW, y = kGridY + (i / 4) * kTileH;
-  const uint16_t accent = failed ? kOrange : typeColor(e.type);
-  tft.fillRect(x + 1, y + 1, kTileW - 2, kTileH - 2, blend565(kTileBg, accent, level, TileAnim::kFull));
-  tft.fillRect(x + 1, y + 1, kStripeW, kTileH - 2, accent);
-
-  char text[kLegendLineMax + 1];
-  displayLabel(e, text, sizeof text);
-  LabelLines lines;
-  wrapLabel(text, kTextW, glyphAdvance, lines);
-  const int16_t textX = x + kStripeW + kLabelPad;
-  const uint16_t fg = level * 2 >= TileAnim::kFull ? kBg : kFg;  // dark text on a mostly-accent fill
-  tft.setFont(&FreeSans9pt7b);
+// Custom fonts draw no background: callers fill the area first.
+static void printAt(const GFXfont &f, const char *s, int16_t x, int16_t baseline, uint16_t color) {
+  tft.setFont(&f);
   tft.setTextSize(1);
-  tft.setTextColor(fg, fg);
-  if (lines.line2[0]) {
-    printCentered(lines.line1, textX, kTextW, y + 24);
-    printCentered(lines.line2, textX, kTextW, y + 45);
-  } else {
-    printCentered(lines.line1, textX, kTextW, y + 34);
-  }
+  tft.setTextColor(color, color);
+  tft.setCursor(x, baseline);
+  tft.print(s);
   tft.setFont(nullptr);
 }
 
-static void drawTopBar(const ScreenState &s, const StatusBoard &status) {
-  tft.fillRect(0, 0, kW, kTopH, kBg);
-  char hhmm[6];
-  formatHhmm(s.clockMinute, hhmm);
-  tft.setTextSize(2);
-  tft.setTextColor(kFg, kBg);
-  tft.setCursor(4, 2);
-  tft.print(hhmm);
-  if (const StatusCard *c = status.top()) {
-    char line[kCardTextMax + 1];
-    fitLine(c->text, kTopTextW, glyphAdvance, line, sizeof line);
-    tft.setFont(&FreeSans9pt7b);
-    tft.setTextSize(1);
-    tft.setTextColor(kFg, kFg);
-    tft.setCursor(kTopTextX, 15);
-    tft.print(line);
-    tft.setFont(nullptr);
-  }
-  tft.fillCircle(296, 10, 5, s.helperPresent ? kGreen : kGrey);
-  if (s.wifiOn) tft.fillCircle(310, 10, 5, kBlue);
+static void printCentered(const GFXfont &f, GlyphWidthFn w, const char *s, int16_t x0, int16_t width,
+                          int16_t baseline, uint16_t color) {
+  printAt(f, s, x0 + (width - textWidth(s, w)) / 2, baseline, color);
 }
 
-static uint16_t barColor(bool muted) { return muted ? kGrey : kBarOn; }
+// Tile i = key position i + 1: rounded body (idle tint -> full hue by press level), hue band
+// on top, legend centred. Corners stay background, so a repaint needs no clear.
+static void drawTile(uint8_t i, const KeyEntry &e, uint8_t level, bool failed) {
+  const int16_t x = kTileX0 + (i % 4) * kTilePitchX, y = kTileY0 + (i / 4) * kTilePitchY;
+  const TileLook look = tileLook(i, level, failed);
+  tft.fillRoundRect(x, y, kTileW, kTileH, kTileR, look.fill);
+  tft.fillRoundRect(x, y, kTileW, kBandH, kBandR, look.band);
+
+  char text[kLegendLineMax + 1];
+  displayLabel(e, text, sizeof text);
+  Legend lg;
+  chooseLegend(text, kLabelW, advBold, advRegular, lg);
+  const bool bold = lg.font == LegendFont::Bold;
+  const GFXfont &f = bold ? FreeSansBold9pt7b : FreeSans9pt7b;
+  const GlyphWidthFn w = bold ? advBold : advRegular;
+  if (lg.lines.line2[0]) {
+    printCentered(f, w, lg.lines.line1, x, kTileW, y + 23, look.text);
+    printCentered(f, w, lg.lines.line2, x, kTileW, y + 41, look.text);
+  } else {
+    printCentered(f, w, lg.lines.line1, x, kTileW, y + 32, look.text);
+  }
+}
+
+static void drawTopBar(const ScreenState &s, const StatusBoard &status) {
+  tft.fillRect(0, 0, kW, kTopH, kThemeBar);
+  char hhmm[6];
+  formatHhmm(s.clockMinute, hhmm);
+  printAt(FreeSansBold12pt7b, hhmm, 6, 18, kWhite);
+  if (const StatusCard *c = status.top()) {
+    char line[kCardTextMax + 1];
+    fitLine(c->text, kTopTextW, advRegular, line, sizeof line);
+    printAt(FreeSans9pt7b, line, kTopTextX, 16, kThemeTopText);
+  }
+  tft.fillCircle(294, 10, 4, s.helperPresent ? kThemeHelper : kThemeSegOff);
+  if (s.wifiOn) tft.fillCircle(308, 10, 4, kThemeWifi);
+}
+
+static void drawSegments(uint8_t first, uint8_t count, uint8_t lit, bool muted) {
+  for (uint8_t i = first; i < first + count && i < kVolSegments; i++)
+    tft.fillRoundRect(kSegX + i * kSegPitch, kSegY, kSegW, kSegH, kSegR,
+                      i < lit ? segmentColor(i, muted) : kThemeSegOff);
+}
 
 static void drawBarFull(const ScreenState &s) {
-  const uint16_t inner = kBarW - 2, fill = barFill(s.volumePercent, inner);
-  tft.drawRect(kBarX, kLine1Y, kBarW, kBarH, kFg);
-  tft.fillRect(kBarX + 1, kLine1Y + 1, fill, kBarH - 2, barColor(s.speakerMuted));
-  tft.fillRect(kBarX + 1 + fill, kLine1Y + 1, inner - fill, kBarH - 2, kBg);
+  drawSegments(0, kVolSegments, litSegments(s.volumePercent), s.speakerMuted);
 }
 
 static void drawBarDelta(const ScreenState &prev, const ScreenState &cur) {
-  const uint16_t inner = kBarW - 2;
-  Span sp = barDeltaH(barFill(prev.volumePercent, inner), barFill(cur.volumePercent, inner), kBarX + 1);
-  if (sp.w) tft.fillRect(sp.x, kLine1Y + 1, sp.w, kBarH - 2, sp.filled ? barColor(cur.speakerMuted) : kBg);
+  const uint8_t lit = litSegments(cur.volumePercent);
+  const SegSpan sp = segDelta(litSegments(prev.volumePercent), lit);
+  drawSegments(sp.first, sp.count, lit, cur.speakerMuted);
 }
 
+// "65%" in FreeSansBold12pt; "100%" (61 px) does not fit the 51 px box -> FreeSansBold9pt.
+// Muted: "OFF" in red ("MUTED" is 87 px bold 12, 63 px regular 9: wider than the box).
 static void drawVolumeText(const ScreenState &s) {
+  tft.fillRect(kPctX, kPctBoxY, kPctBoxW, kPctBoxH, kThemeBar);
   char buf[8];
-  if (s.speakerMuted) snprintf(buf, sizeof buf, "MUTED");
-  else snprintf(buf, sizeof buf, "%3u%% ", s.volumePercent);  // 5 chars: overwrites "MUTED"
-  tft.setTextSize(2);
-  tft.setTextColor(s.speakerMuted ? kRed : kFg, kBg);  // opaque text: no clear, no flicker
-  tft.setCursor(kPctX, kLine1Y + 2);
-  tft.print(buf);
+  if (s.speakerMuted) snprintf(buf, sizeof buf, "OFF");
+  else snprintf(buf, sizeof buf, "%u%%", s.volumePercent);
+  const bool big = textWidth(buf, advBig) <= kPctBoxW;
+  printAt(big ? FreeSansBold12pt7b : FreeSansBold9pt7b, buf, kPctX, kPctBase,
+          s.speakerMuted ? kThemeMicMuted : kWhite);
 }
 
+// Pill: green with the helper's mic %, red when muted, grey when the level is unknown.
+// Muted reads "MIC OFF": "MIC MUTE" is 93 px bold, wider than the 87 px pill.
 static void drawMic(const ScreenState &s) {
   char buf[10];
-  if (s.micMuted) snprintf(buf, sizeof buf, "MIC MUTE");
-  else if (s.micLevelKnown) snprintf(buf, sizeof buf, "MIC %3u%%", s.micPercent);
-  else snprintf(buf, sizeof buf, "MIC LIVE");
-  tft.setTextSize(2);
-  tft.setTextColor(s.micMuted ? kRed : kGreen, kBg);
-  tft.setCursor(kMicX, kLine1Y + 2);
-  tft.print(buf);
+  uint16_t color;
+  if (s.micMuted) {
+    snprintf(buf, sizeof buf, "MIC OFF");
+    color = kThemeMicMuted;
+  } else if (s.micLevelKnown) {
+    snprintf(buf, sizeof buf, "MIC %u%%", s.micPercent);
+    color = kThemeMicLive;
+  } else {
+    snprintf(buf, sizeof buf, "MIC LIVE");
+    color = kThemeMicUnknown;
+  }
+  tft.fillRoundRect(kPillX, kPillY, kPillW, kPillH, kPillR, color);
+  printCentered(FreeSansBold9pt7b, advBold, buf, kPillX, kPillW, kPillBase, 0x0000);
 }
 
 static void drawSplash() {
-  tft.fillScreen(kBg);
-  tft.setTextColor(kFg, kBg);
-  tft.setTextSize(4);
-  tft.setCursor((320 - 9 * 24) / 2, 90);
-  tft.print("SAUCEDECK");
-  tft.setTextSize(2);
-  tft.setCursor((320 - 12 * 12) / 2, 140);
-  tft.print("macro deck v1");
+  tft.fillScreen(kThemeBg);
+  const char *name = "SAUCEDECK";
+  const int16_t w = textWidth(name, advBig), x = (kW - w) / 2;
+  printAt(FreeSansBold12pt7b, name, x, 120, kWhite);
+  // Underline: one short bar per key hue.
+  const int16_t seg = w / kKeyCount;
+  for (uint8_t i = 0; i < kKeyCount; i++) tft.fillRect(x + i * seg, 128, seg, 4, kKeyHues[i]);
+  printCentered(FreeSans9pt7b, advRegular, "macro deck v1", 0, kW, 156, kThemeTopText);
 }
 
 void displayBegin() {
@@ -196,7 +209,7 @@ void displaySetApPassword(const char *p) { snprintf(apPassword, sizeof apPasswor
 
 // Banner text on strip line 2 (drawLine2 decides banner vs card).
 static void drawBanner(uint8_t b, uint8_t arg) {
-  tft.fillRect(0, kLine2Y, kW, kLine2H, kBg);
+  tft.fillRect(0, kLine2Y, kW, kLine2H, kThemeBar);
   if (b == BANNER_NONE) return;
   char text[40];
   switch (b) {
@@ -212,46 +225,37 @@ static void drawBanner(uint8_t b, uint8_t arg) {
     case BANNER_BROWNOUT: snprintf(text, sizeof text, "Reset: brownout"); break;
     default: text[0] = 0; break;
   }
-  tft.setTextSize(2);
-  tft.setTextColor(b == BANNER_APPLY ? ST77XX_YELLOW : kFg, kBg);
-  tft.setCursor(4, kLine2Y + 5);
-  tft.print(text);
+  printAt(FreeSansBold9pt7b, text, 8, kLine2Base, b == BANNER_APPLY ? kApplyYellow : kWhite);
 }
 
-static void drawIcon(uint8_t icon, int16_t x, int16_t y) {
+static void drawIcon(uint8_t icon) {
   if (icon == 0 || icon >= kCardIcons) return;
-  tft.fillRoundRect(x, y, 18, 18, 4, kIcons[icon].color);
+  tft.fillRoundRect(kIconX, kIconY, kIconS, kIconS, kIconR, kIcons[icon].color);
   char s[2] = {kIcons[icon].letter, 0};
-  tft.setTextSize(2);
-  tft.setTextColor(kBg, kIcons[icon].color);
-  tft.setCursor(x + 3, y + 2);
-  tft.print(s);
+  printCentered(FreeSansBold9pt7b, advBold, s, kIconX, kIconS, kLine2Base, kWhite);
 }
 
-// Strip line 2: a banner wins; otherwise the rotating status card with its n/m index.
+// Strip line 2: a banner wins; otherwise the rotating status card with one dot per card.
 static void drawLine2(const ScreenState &s, const StatusBoard &status) {
   if (s.banner != BANNER_NONE) {
     drawBanner(s.banner, s.bannerArg);
     return;
   }
-  tft.fillRect(0, kLine2Y, kW, kLine2H, kBg);
+  tft.fillRect(0, kLine2Y, kW, kLine2H, kThemeBar);
   const StatusCard *c = status.current();
   if (!c) return;
-  drawIcon(c->icon, 4, kLine2Y + 4);
+  drawIcon(c->icon);
+  const uint8_t n = status.count() < kMaxDots ? status.count() : kMaxDots;
+  int16_t textW = kCardTextMaxW;
+  if (n) {
+    const int16_t room = cardDotX(0, n) - kDotR - 4 - kCardTextX;  // >= 4 px before the first dot
+    if (room < textW) textW = room;
+  }
   char line[kCardTextMax + 1];
-  fitLine(c->text, kCardTextW, glyphAdvance, line, sizeof line);
-  tft.setFont(&FreeSans9pt7b);
-  tft.setTextSize(1);
-  tft.setTextColor(kFg, kFg);
-  tft.setCursor(kCardTextX, kLine2Y + 19);
-  tft.print(line);
-  tft.setFont(nullptr);
-  char idx[8];
-  snprintf(idx, sizeof idx, "%u/%u", static_cast<unsigned>(status.index()), static_cast<unsigned>(status.count()));
-  tft.setTextSize(2);
-  tft.setTextColor(kGrey, kBg);
-  tft.setCursor(kIdxX, kLine2Y + 5);
-  tft.print(idx);
+  fitLine(c->text, static_cast<uint16_t>(textW), advRegular, line, sizeof line);
+  printAt(FreeSans9pt7b, line, kCardTextX, kLine2Base, kWhite);
+  for (uint8_t k = 0; k < n; k++)
+    tft.fillCircle(cardDotX(k, n), kDotY, kDotR, k + 1 == status.index() ? kWhite : kThemeSegOff);
 }
 
 void displayUpdate(const ScreenState &state, const KeyMap &keys, TileAnim &anim, const StatusBoard &status,
@@ -259,7 +263,8 @@ void displayUpdate(const ScreenState &state, const KeyMap &keys, TileAnim &anim,
   if (splashing) {
     if (static_cast<int32_t>(nowMs - splashUntil) < 0) return;
     splashing = false;
-    tft.fillScreen(kBg);
+    tft.fillScreen(kThemeBg);
+    tft.fillRect(0, kStripY, kW, 240 - kStripY, kThemeBar);  // strip ground; parts clear only their box
     model.invalidate();
   }
   if (nowMs - lastFrame < kMinFrameMs) return;
