@@ -23,6 +23,8 @@ struct ScreenState {
   uint8_t keymapGen;   // bumped when a key map goes live: every tile repaints
   bool helperPresent;  // top bar dot
   bool wifiOn;         // top bar dot
+  int16_t clockMinute;  // local minute of day, -1 = unknown (top bar clock)
+  uint8_t statusGen;    // StatusBoard::gen(): top bar text or strip card changed
 };
 
 enum : uint16_t {
@@ -31,8 +33,8 @@ enum : uint16_t {
   DIRTY_BAR_COLOR = 1u << 1,    // mute changed: repaint whole bar interior
   DIRTY_VOLUME_TEXT = 1u << 2,  // "62%" / "MUTED"
   DIRTY_MIC = 1u << 3,
-  DIRTY_BANNER = 1u << 4,       // strip line 2 (Wi-Fi, Apply?, helper missing, ...)
-  DIRTY_TOPBAR = 1u << 5,       // helper / Wi-Fi dots
+  DIRTY_BANNER = 1u << 4,       // strip line 2: banner, else status card
+  DIRTY_TOPBAR = 1u << 5,       // clock, slot 0 text, helper / Wi-Fi dots
   DIRTY_TILES = 1u << 6,        // repaint the tiles in tileMask()
   DIRTY_ALL = 0x7F,
 };
@@ -75,6 +77,8 @@ class ScreenModel {
       if (next.micLevelKnown != cur_.micLevelKnown || next.micPercent != cur_.micPercent) dirty |= DIRTY_MIC;
       if (next.banner != cur_.banner || next.bannerArg != cur_.bannerArg) dirty |= DIRTY_BANNER;
       if (next.helperPresent != cur_.helperPresent || next.wifiOn != cur_.wifiOn) dirty |= DIRTY_TOPBAR;
+      if (next.clockMinute != cur_.clockMinute) dirty |= DIRTY_TOPBAR;
+      if (next.statusGen != cur_.statusGen) dirty |= DIRTY_TOPBAR | DIRTY_BANNER;
       if (next.keymapGen != cur_.keymapGen) tiles_ = kAllTiles;
       if (tiles_) dirty |= DIRTY_TILES;
     }

@@ -125,6 +125,34 @@ void test_wrap_longest_value_stays_in_buffers() {
   TEST_ASSERT_EQUAL_STRING("...", l.line2);
 }
 
+// --- fitLine: one line, cut with "..." when too wide ---
+
+void test_fitline_fits() {
+  char out[49];
+  fitLine("CPU 12%", 100, w10, out, sizeof out);
+  TEST_ASSERT_EQUAL_STRING("CPU 12%", out);
+}
+
+void test_fitline_cuts_with_dots() {
+  char out[49];
+  fitLine("Daft Punk - Around the World", 100, w10, out, sizeof out);
+  TEST_ASSERT_EQUAL_STRING("Daft Pu...", out);  // 7 x 10 + 30
+}
+
+void test_fitline_trims_space_before_dots() {
+  char out[49];
+  fitLine("Daft Punk - Around", 90, w10, out, sizeof out);  // 60 px left for text -> "Daft P"
+  TEST_ASSERT_EQUAL_STRING("Daft P...", out);
+  fitLine("Daft Punk", 80, w10, out, sizeof out);  // 50 px -> "Daft " -> trimmed "Daft"
+  TEST_ASSERT_EQUAL_STRING("Daft...", out);
+}
+
+void test_fitline_respects_cap() {
+  char out[8];
+  fitLine("abcdefghijklmnop", 1000, w10, out, sizeof out);  // wide enough, but cap 8
+  TEST_ASSERT_EQUAL_STRING("abcd...", out);
+}
+
 // --- TileAnim: held = full fill, release fades 3/4, 2/4, 1/4, 0 at 60 ms steps ---
 
 void test_anim_idle_nothing_dirty() {
@@ -225,6 +253,10 @@ int main(int, char **) {
   RUN_TEST(test_wrap_uses_glyph_widths);
   RUN_TEST(test_wrap_empty);
   RUN_TEST(test_wrap_longest_value_stays_in_buffers);
+  RUN_TEST(test_fitline_fits);
+  RUN_TEST(test_fitline_cuts_with_dots);
+  RUN_TEST(test_fitline_trims_space_before_dots);
+  RUN_TEST(test_fitline_respects_cap);
   RUN_TEST(test_anim_idle_nothing_dirty);
   RUN_TEST(test_anim_press_fills_tile_once);
   RUN_TEST(test_anim_release_fades_in_steps);

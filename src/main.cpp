@@ -231,7 +231,7 @@ void loop() {
   } else if (brownoutNotice && now < 8000) {
     banner = BANNER_BROWNOUT;
   }
-  displayUpdate({pct, spkMuted, micMuted, micKnown, micPct, banner, arg, keymapGen, hl.present(now), wifi.on()},
+  displayUpdate({pct, spkMuted, micMuted, micKnown, micPct, banner, arg, keymapGen, hl.present(now), wifi.on(), -1, 0},
                 deck.keyMap(), tileAnim, now);
   ledsUpdate({pct, spkMuted, micMuted}, now);
 }

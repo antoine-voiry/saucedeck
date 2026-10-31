@@ -55,6 +55,24 @@ inline size_t fit(const char *s, size_t n, uint16_t maxPx, GlyphWidthFn w) {
 }
 }  // namespace legend_detail
 
+// One line at most maxPx wide; overflow is cut and ends with "...". out holds cap bytes
+// (cap >= 4); text that does not fit in cap is cut the same way.
+inline void fitLine(const char *text, uint16_t maxPx, GlyphWidthFn w, char *out, size_t cap) {
+  using namespace legend_detail;
+  size_t n = strlen(text);
+  if (n < cap && fit(text, n, maxPx, w) == n) {
+    memcpy(out, text, n);
+    out[n] = 0;
+    return;
+  }
+  uint16_t dots = width("...", 3, w);
+  size_t c = dots >= maxPx ? 0 : fit(text, n, static_cast<uint16_t>(maxPx - dots), w);
+  if (c > cap - 4) c = cap - 4;
+  while (c && text[c - 1] == ' ') c--;
+  memcpy(out, text, c);
+  memcpy(out + c, "...", 4);
+}
+
 // Up to two lines, each at most maxPx wide. Line 1 breaks at the last space that fits
 // (hard cut if none); line 2 that still overflows is cut and ends with "...".
 inline void wrapLabel(const char *text, uint16_t maxPx, GlyphWidthFn w, LabelLines &out) {
@@ -78,19 +96,6 @@ inline void wrapLabel(const char *text, uint16_t maxPx, GlyphWidthFn w, LabelLin
   out.line1[cut] = 0;
 
   const char *rest = text + cut;
-  size_t rn = n - cut;
-  while (rn && *rest == ' ') {
-    rest++;
-    rn--;
-  }
-  if (fit(rest, rn, maxPx, w) == rn) {
-    memcpy(out.line2, rest, rn);
-    out.line2[rn] = 0;
-    return;
-  }
-  uint16_t dots = width("...", 3, w);
-  size_t c = dots >= maxPx ? 0 : fit(rest, rn, static_cast<uint16_t>(maxPx - dots), w);
-  while (c && rest[c - 1] == ' ') c--;
-  memcpy(out.line2, rest, c);
-  memcpy(out.line2 + c, "...", 4);
+  while (*rest == ' ') rest++;
+  fitLine(rest, maxPx, w, out.line2, sizeof out.line2);
 }

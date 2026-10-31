@@ -47,6 +47,7 @@ static ScreenState base() {
   ScreenState s{};
   s.volumePercent = 20;
   s.banner = BANNER_NONE;
+  s.clockMinute = -1;
   return s;
 }
 
@@ -109,6 +110,22 @@ void test_model_helper_and_wifi_mark_top_bar() {
   TEST_ASSERT_EQUAL_HEX16(DIRTY_TOPBAR, m.update(s, 0));
   s.wifiOn = true;
   TEST_ASSERT_EQUAL_HEX16(DIRTY_TOPBAR, m.update(s, 0));
+}
+
+void test_model_clock_minute_marks_top_bar() {
+  ScreenModel m;
+  m.update(base(), 0);
+  ScreenState s = base();
+  s.clockMinute = 14 * 60 + 32;
+  TEST_ASSERT_EQUAL_HEX16(DIRTY_TOPBAR, m.update(s, 0));
+}
+
+void test_model_status_gen_marks_top_bar_and_line2() {
+  ScreenModel m;
+  m.update(base(), 0);
+  ScreenState s = base();
+  s.statusGen = 1;
+  TEST_ASSERT_EQUAL_HEX16(DIRTY_TOPBAR | DIRTY_BANNER, m.update(s, 0));
 }
 
 void test_model_tile_changes_pass_through() {
@@ -193,6 +210,8 @@ int main(int, char **) {
   RUN_TEST(test_model_mic_changes_mark_mic_only);
   RUN_TEST(test_model_banner_change_marks_banner);
   RUN_TEST(test_model_helper_and_wifi_mark_top_bar);
+  RUN_TEST(test_model_clock_minute_marks_top_bar);
+  RUN_TEST(test_model_status_gen_marks_top_bar_and_line2);
   RUN_TEST(test_model_tile_changes_pass_through);
   RUN_TEST(test_model_keymap_change_repaints_every_tile);
   RUN_TEST(test_model_previous_tracks_last_drawn);
