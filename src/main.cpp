@@ -10,6 +10,7 @@
 #include "mcp_io.h"
 #include "encoders.h"
 #include "idle_dimmer.h"
+#include "tile_anim.h"
 #include "helper_link.h"
 #include "keymap_store.h"
 #include "wifi_portal.h"
@@ -43,6 +44,8 @@ static uint8_t wifiInfoTick = 0;  // forces a banner redraw when the info text c
 static uint8_t invalidKey = 0;
 static uint32_t invalidUntil = 0, wifiFailedUntil = 0;  // "helper not running" banner end
 static IdleDimmer dimmer;  // LEDs + LCD fade after 120 s idle, off at 240 s
+static TileAnim tileAnim;    // legend tile press feedback
+static uint8_t keymapGen = 0;  // bumped when a key map goes live: legends repaint
 
 static void run(const ActionList &actions) {
   for (size_t i = 0; i < actions.count; i++) {
@@ -92,7 +95,10 @@ static void run(const ActionList &actions) {
         ledsSetWifi(wifi.on());
         break;
       case ActionType::KeyMapDiscarded: break;  // banner simply disappears
-      case ActionType::KeyMapCommitted: keymapSave(deck.keyMap()); break;
+      case ActionType::KeyMapCommitted:
+        keymapSave(deck.keyMap());
+        keymapGen++;
+        break;
       case ActionType::MicMute:
         // Release only the chord keys: deck F-keys may still be held
         for (uint8_t k : kMicMuteChord) Keyboard.press(k);
@@ -149,6 +155,7 @@ void loop() {
   encodersRead(d1, d2);
   if (d1 || d2) deck.onEncoders(d1, d2, millis(), actions);
   run(actions);
+  tileAnim.onKeys(deck.keysHeld(), helperMissingKeys(actions), now);
 
   now = millis();
   portalPoll();
@@ -224,6 +231,7 @@ void loop() {
   } else if (brownoutNotice && now < 8000) {
     banner = BANNER_BROWNOUT;
   }
-  displayUpdate({pct, spkMuted, micMuted, micKnown, micPct, banner, arg}, now);
+  displayUpdate({pct, spkMuted, micMuted, micKnown, micPct, banner, arg, keymapGen, hl.present(now), wifi.on()},
+                deck.keyMap(), tileAnim, now);
   ledsUpdate({pct, spkMuted, micMuted}, now);
 }

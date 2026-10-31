@@ -356,8 +356,9 @@ void Adafruit_ST7789::fillRoundRect(int16_t, int16_t, int16_t, int16_t, int16_t,
 void Adafruit_ST7789::fillTriangle(int16_t, int16_t, int16_t, int16_t, int16_t, int16_t, uint16_t) {}
 void Adafruit_ST7789::drawLine(int16_t, int16_t, int16_t, int16_t, uint16_t) {}
 void Adafruit_ST7789::drawCircleHelper(int16_t, int16_t, int16_t, uint8_t, uint16_t) {}
+void Adafruit_ST7789::fillCircle(int16_t, int16_t, int16_t, uint16_t) {}
 size_t Adafruit_ST7789::print(const char *s) {
-  board().lcd.texts.push_back({cx_, cy_, textSize_, fg_, s});
+  board().lcd.texts.push_back({cx_, cy_, textSize_, fg_, s, font_ != nullptr});
   return strlen(s);
 }
 

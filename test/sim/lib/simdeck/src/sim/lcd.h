@@ -9,6 +9,7 @@ struct SimLcdText {
   uint8_t size;
   uint16_t fg;
   std::string s;
+  bool customFont;  // printed with setFont(&FreeSans9pt7b) (legend tiles)
 };
 
 struct SimLcd {

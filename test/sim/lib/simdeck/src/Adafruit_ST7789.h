@@ -30,9 +30,12 @@ class Adafruit_ST7789 {
   void setTextColor(uint16_t fg, uint16_t bg) { fg_ = fg; bg_ = bg; }
   void setCursor(int16_t x, int16_t y) { cx_ = x; cy_ = y; }
   size_t print(const char *s);
+  void fillCircle(int16_t x, int16_t y, int16_t r, uint16_t c);
+  void setFont(const GFXfont *f = nullptr) { font_ = f; }
 
  private:
   uint8_t textSize_ = 1;
   uint16_t fg_ = 0xFFFF, bg_ = 0;
   int16_t cx_ = 0, cy_ = 0;
+  const GFXfont *font_ = nullptr;
 };

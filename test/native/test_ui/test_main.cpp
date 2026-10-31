@@ -21,87 +21,129 @@ void test_fill_clamps_over_100() {
   TEST_ASSERT_EQUAL_UINT16(178, barFill(150, 178));
 }
 
-// --- barDelta: only the strip between old and new fill is redrawn (bar grows upward) ---
+// --- barDeltaH: only the span between old and new fill is redrawn (bar grows rightward) ---
 
-void test_delta_grow_paints_strip_above_old_fill() {
-  // interior y = 31..208 (top 31, h 178); bottom = 209
-  Strip s = barDelta(10, 30, 31, 178);
+void test_delta_grow_paints_span_after_old_fill() {
+  Span s = barDeltaH(10, 30, 5);
   TEST_ASSERT_TRUE(s.filled);
-  TEST_ASSERT_EQUAL_UINT16(209 - 30, s.y);
-  TEST_ASSERT_EQUAL_UINT16(20, s.h);
+  TEST_ASSERT_EQUAL_UINT16(15, s.x);
+  TEST_ASSERT_EQUAL_UINT16(20, s.w);
 }
 
-void test_delta_shrink_clears_strip() {
-  Strip s = barDelta(30, 10, 31, 178);
+void test_delta_shrink_clears_span() {
+  Span s = barDeltaH(30, 10, 5);
   TEST_ASSERT_FALSE(s.filled);
-  TEST_ASSERT_EQUAL_UINT16(209 - 30, s.y);
-  TEST_ASSERT_EQUAL_UINT16(20, s.h);
+  TEST_ASSERT_EQUAL_UINT16(15, s.x);
+  TEST_ASSERT_EQUAL_UINT16(20, s.w);
 }
 
 void test_delta_no_change_is_empty() {
-  Strip s = barDelta(42, 42, 31, 178);
-  TEST_ASSERT_EQUAL_UINT16(0, s.h);
+  TEST_ASSERT_EQUAL_UINT16(0, barDeltaH(42, 42, 5).w);
 }
 
-// --- ScreenModel: dirty flags so the glue redraws only what changed ---
+// --- ScreenModel v2: dirty flags + tiles to repaint ---
 
-void test_model_first_frame_all_dirty() {
+static ScreenState base() {
+  ScreenState s{};
+  s.volumePercent = 20;
+  s.banner = BANNER_NONE;
+  return s;
+}
+
+void test_model_first_frame_all_dirty_all_tiles() {
   ScreenModel m;
-  TEST_ASSERT_EQUAL_HEX8(DIRTY_ALL, m.update({0, false, false, false, 0, BANNER_NONE, 0}));
+  TEST_ASSERT_EQUAL_HEX16(DIRTY_ALL, m.update(base(), 0));
+  TEST_ASSERT_EQUAL_HEX16(0x0FFF, m.tileMask());
 }
 
 void test_model_same_state_clean() {
   ScreenModel m;
-  m.update({20, false, false, false, 0, BANNER_NONE, 0});
-  TEST_ASSERT_EQUAL_HEX8(DIRTY_NONE, m.update({20, false, false, false, 0, BANNER_NONE, 0}));
+  m.update(base(), 0);
+  TEST_ASSERT_EQUAL_HEX16(DIRTY_NONE, m.update(base(), 0));
+  TEST_ASSERT_EQUAL_HEX16(0, m.tileMask());
 }
 
 void test_model_volume_change_marks_bar_and_text() {
   ScreenModel m;
-  m.update({20, false, false, false, 0, BANNER_NONE, 0});
-  TEST_ASSERT_EQUAL_HEX8(DIRTY_BAR | DIRTY_VOLUME_TEXT, m.update({26, false, false, false, 0, BANNER_NONE, 0}));
+  m.update(base(), 0);
+  ScreenState s = base();
+  s.volumePercent = 26;
+  TEST_ASSERT_EQUAL_HEX16(DIRTY_BAR | DIRTY_VOLUME_TEXT, m.update(s, 0));
 }
 
-void test_model_speaker_mute_marks_color_and_icon() {
-  // Muted bar keeps its level but is drawn grey: full bar repaint
+void test_model_speaker_mute_marks_color_and_text() {
   ScreenModel m;
-  m.update({20, false, false, false, 0, BANNER_NONE, 0});
-  TEST_ASSERT_EQUAL_HEX8(DIRTY_BAR_COLOR | DIRTY_SPEAKER_ICON, m.update({20, true, false, false, 0, BANNER_NONE, 0}));
+  m.update(base(), 0);
+  ScreenState s = base();
+  s.speakerMuted = true;
+  TEST_ASSERT_EQUAL_HEX16(DIRTY_BAR_COLOR | DIRTY_VOLUME_TEXT, m.update(s, 0));
 }
 
-void test_model_mic_change_marks_mic_only() {
+void test_model_mic_changes_mark_mic_only() {
   ScreenModel m;
-  m.update({20, false, false, false, 0, BANNER_NONE, 0});
-  TEST_ASSERT_EQUAL_HEX8(DIRTY_MIC, m.update({20, false, true, false, 0, BANNER_NONE, 0}));
+  m.update(base(), 0);
+  ScreenState s = base();
+  s.micMuted = true;
+  TEST_ASSERT_EQUAL_HEX16(DIRTY_MIC, m.update(s, 0));
+  s.micLevelKnown = true;
+  s.micPercent = 45;
+  TEST_ASSERT_EQUAL_HEX16(DIRTY_MIC, m.update(s, 0));
 }
 
-void test_model_previous_fill_tracks_last_drawn() {
+void test_model_banner_change_marks_banner() {
   ScreenModel m;
-  m.update({50, false, false, false, 0, BANNER_NONE, 0});
-  TEST_ASSERT_EQUAL_UINT8(50, m.current().volumePercent);
-  m.update({75, false, false, false, 0, BANNER_NONE, 0});
+  m.update(base(), 0);
+  ScreenState s = base();
+  s.banner = BANNER_APPLY;
+  s.bannerArg = 30;
+  TEST_ASSERT_EQUAL_HEX16(DIRTY_BANNER, m.update(s, 0));
+  s.bannerArg = 29;
+  TEST_ASSERT_EQUAL_HEX16(DIRTY_BANNER, m.update(s, 0));
+}
+
+void test_model_helper_and_wifi_mark_top_bar() {
+  ScreenModel m;
+  m.update(base(), 0);
+  ScreenState s = base();
+  s.helperPresent = true;
+  TEST_ASSERT_EQUAL_HEX16(DIRTY_TOPBAR, m.update(s, 0));
+  s.wifiOn = true;
+  TEST_ASSERT_EQUAL_HEX16(DIRTY_TOPBAR, m.update(s, 0));
+}
+
+void test_model_tile_changes_pass_through() {
+  ScreenModel m;
+  m.update(base(), 0);
+  TEST_ASSERT_EQUAL_HEX16(DIRTY_TILES, m.update(base(), (1u << 3) | (1u << 9)));
+  TEST_ASSERT_EQUAL_HEX16((1u << 3) | (1u << 9), m.tileMask());
+}
+
+void test_model_keymap_change_repaints_every_tile() {
+  ScreenModel m;
+  m.update(base(), 0);
+  ScreenState s = base();
+  s.keymapGen = 1;
+  TEST_ASSERT_EQUAL_HEX16(DIRTY_TILES, m.update(s, 0));
+  TEST_ASSERT_EQUAL_HEX16(0x0FFF, m.tileMask());
+}
+
+void test_model_previous_tracks_last_drawn() {
+  ScreenModel m;
+  ScreenState s = base();
+  s.volumePercent = 50;
+  m.update(s, 0);
+  s.volumePercent = 75;
+  m.update(s, 0);
   TEST_ASSERT_EQUAL_UINT8(75, m.current().volumePercent);
   TEST_ASSERT_EQUAL_UINT8(50, m.previous().volumePercent);
 }
 
 void test_model_invalidate_forces_full_redraw() {
   ScreenModel m;
-  m.update({20, false, false, false, 0, BANNER_NONE, 0});
+  m.update(base(), 0);
   m.invalidate();
-  TEST_ASSERT_EQUAL_HEX8(DIRTY_ALL, m.update({20, false, false, false, 0, BANNER_NONE, 0}));
-}
-
-void test_model_mic_level_change_marks_mic() {
-  ScreenModel m;
-  m.update({20, false, false, true, 40, BANNER_NONE, 0});
-  TEST_ASSERT_EQUAL_HEX8(DIRTY_MIC, m.update({20, false, false, true, 45, BANNER_NONE, 0}));
-}
-
-void test_model_banner_change_marks_banner() {
-  ScreenModel m;
-  m.update({20, false, false, false, 0, BANNER_NONE, 0});
-  TEST_ASSERT_EQUAL_HEX8(DIRTY_BANNER, m.update({20, false, false, false, 0, BANNER_APPLY, 30}));
-  TEST_ASSERT_EQUAL_HEX8(DIRTY_BANNER, m.update({20, false, false, false, 0, BANNER_APPLY, 29}));
+  TEST_ASSERT_EQUAL_HEX16(DIRTY_ALL, m.update(base(), 0));
+  TEST_ASSERT_EQUAL_HEX16(0x0FFF, m.tileMask());
 }
 
 // --- IdleDimmer: full 120 s, linear fade, off at 240 s ---
@@ -141,18 +183,20 @@ int main(int, char **) {
   RUN_TEST(test_fill_zero_and_full);
   RUN_TEST(test_fill_rounds_nearest);
   RUN_TEST(test_fill_clamps_over_100);
-  RUN_TEST(test_delta_grow_paints_strip_above_old_fill);
-  RUN_TEST(test_delta_shrink_clears_strip);
+  RUN_TEST(test_delta_grow_paints_span_after_old_fill);
+  RUN_TEST(test_delta_shrink_clears_span);
   RUN_TEST(test_delta_no_change_is_empty);
-  RUN_TEST(test_model_first_frame_all_dirty);
+  RUN_TEST(test_model_first_frame_all_dirty_all_tiles);
   RUN_TEST(test_model_same_state_clean);
   RUN_TEST(test_model_volume_change_marks_bar_and_text);
-  RUN_TEST(test_model_speaker_mute_marks_color_and_icon);
-  RUN_TEST(test_model_mic_change_marks_mic_only);
-  RUN_TEST(test_model_previous_fill_tracks_last_drawn);
-  RUN_TEST(test_model_invalidate_forces_full_redraw);
-  RUN_TEST(test_model_mic_level_change_marks_mic);
+  RUN_TEST(test_model_speaker_mute_marks_color_and_text);
+  RUN_TEST(test_model_mic_changes_mark_mic_only);
   RUN_TEST(test_model_banner_change_marks_banner);
+  RUN_TEST(test_model_helper_and_wifi_mark_top_bar);
+  RUN_TEST(test_model_tile_changes_pass_through);
+  RUN_TEST(test_model_keymap_change_repaints_every_tile);
+  RUN_TEST(test_model_previous_tracks_last_drawn);
+  RUN_TEST(test_model_invalidate_forces_full_redraw);
   RUN_TEST(test_dimmer_full_until_fade_start);
   RUN_TEST(test_dimmer_linear_fade_and_off);
   RUN_TEST(test_dimmer_activity_wakes_instantly);
