@@ -43,3 +43,4 @@
 - One `pio run -e saucedeck -e bringup` failed once (saucedeck, 3 s) and left a generated
   `src/idf_component.yml`; not reproducible (incremental, clean, without the file). Watch for it.
   [unverified cause]
+- **Firmware with Plan 1 (legend layout) + Plan 2 (status cards) + FreeSans9pt7b (2026-10-31) = 1218239 B = 38.7 % of the 3 MB huge_app slot.** `[verified: build output 2026-10-31]`

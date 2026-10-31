@@ -1,0 +1,31 @@
+2026-10-31 flash + smoke test, branch lcd-legends-status
+Firmware commit: 22f0cf9
+
+Done check:
+  pio test -e native: 269 test cases: 269 succeeded
+  pio test -e sim: 25 test cases: 25 succeeded
+  pio run -e saucedeck -e bringup: both SUCCESS, no warnings in src/ or lib/deck_core/
+  saucedeck Flash: 38.7% (used 1218239 bytes from 3145728 bytes)
+  bringup   Flash: 13.6% (used 427311 bytes from 3145728 bytes)
+
+Flash (first attempt with auto port: "Couldn't find a board"; retried with explicit port):
+  pio run -e saucedeck -t upload --upload-port /dev/cu.usbmodem288485692A0C2
+  Wrote 1218640 bytes (763438 compressed) at 0x00010000 in 6.8 seconds (1441.6 kbit/s).
+  Hash of data verified.
+  Hard resetting via RTS pin...
+  [SUCCESS]
+
+Smoke test (port re-enumerated as /dev/cu.usbmodem288485692A0C2):
+  python -I tools/helper_sim.py 40 60 8 --clock --card=0:calendar:Standup\ in\ 12m --card=1:music:Daft\ Punk --card=2:cpu:CPU\ 12%
+  output: done (no traceback, no deck: lines)
+  deck still enumerated afterwards: yes
+
+Operator visual check: pending (legends, fade, clock, cards on the panel).
+Operator checks still pending:
+  - legends readable + correct positions
+  - tile fill/fade on key press
+  - clock + cards + rotation with helper_sim
+  - cards clear within 3 s after helper_sim stops
+  - no missed keys during card rotation
+  - measure displayUpdate frame time: log max micros() around displayUpdate on a rotation frame; >30 ms -> follow-up
+Status: not bench-verified visually.
