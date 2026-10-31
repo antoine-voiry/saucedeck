@@ -2,6 +2,7 @@
 #include <string.h>
 #include "keymap.h"
 #include "legend.h"
+#include "tile_anim.h"
 
 void setUp() {}
 void tearDown() {}
@@ -124,6 +125,89 @@ void test_wrap_longest_value_stays_in_buffers() {
   TEST_ASSERT_EQUAL_STRING("...", l.line2);
 }
 
+// --- TileAnim: held = full fill, release fades 3/4, 2/4, 1/4, 0 at 60 ms steps ---
+
+void test_anim_idle_nothing_dirty() {
+  TileAnim a;
+  TEST_ASSERT_EQUAL_HEX16(0, a.tick(0));
+  TEST_ASSERT_EQUAL_UINT8(0, a.level(0));
+}
+
+void test_anim_press_fills_tile_once() {
+  TileAnim a;
+  a.onKeys(1u << 2, 0, 100);
+  TEST_ASSERT_EQUAL_HEX16(1u << 2, a.tick(100));
+  TEST_ASSERT_EQUAL_UINT8(TileAnim::kFull, a.level(2));
+  TEST_ASSERT_FALSE(a.failed(2));
+  a.onKeys(1u << 2, 0, 110);
+  TEST_ASSERT_EQUAL_HEX16(0, a.tick(110));  // still held: no repaint
+}
+
+void test_anim_release_fades_in_steps() {
+  TileAnim a;
+  a.onKeys(1u << 0, 0, 0);
+  a.tick(0);
+  a.onKeys(0, 0, 200);
+  TEST_ASSERT_EQUAL_HEX16(1u << 0, a.tick(200));
+  TEST_ASSERT_EQUAL_UINT8(3, a.level(0));
+  TEST_ASSERT_EQUAL_HEX16(0, a.tick(259));
+  TEST_ASSERT_EQUAL_HEX16(1u << 0, a.tick(260));
+  TEST_ASSERT_EQUAL_UINT8(2, a.level(0));
+  a.tick(320);
+  TEST_ASSERT_EQUAL_UINT8(1, a.level(0));
+  TEST_ASSERT_EQUAL_HEX16(1u << 0, a.tick(380));
+  TEST_ASSERT_EQUAL_UINT8(0, a.level(0));
+  TEST_ASSERT_EQUAL_HEX16(0, a.tick(1000));
+}
+
+void test_anim_steps_between_frames_merge() {
+  TileAnim a;
+  a.onKeys(1u << 4, 0, 0);
+  a.tick(0);
+  a.onKeys(0, 0, 10);
+  TEST_ASSERT_EQUAL_HEX16(1u << 4, a.tick(500));  // 4 -> 0 in one repaint
+  TEST_ASSERT_EQUAL_UINT8(0, a.level(4));
+}
+
+void test_anim_failed_press_until_next_good_press() {
+  TileAnim a;
+  a.onKeys(1u << 5, 1u << 5, 0);
+  a.tick(0);
+  TEST_ASSERT_TRUE(a.failed(5));
+  a.onKeys(0, 0, 100);
+  a.tick(400);
+  a.onKeys(1u << 5, 0, 500);
+  a.tick(500);
+  TEST_ASSERT_FALSE(a.failed(5));
+}
+
+void test_anim_press_during_fade_refills() {
+  TileAnim a;
+  a.onKeys(1u << 1, 0, 0);
+  a.tick(0);
+  a.onKeys(0, 0, 100);
+  a.tick(160);
+  TEST_ASSERT_EQUAL_UINT8(2, a.level(1));
+  a.onKeys(1u << 1, 0, 170);
+  TEST_ASSERT_EQUAL_HEX16(1u << 1, a.tick(170));
+  TEST_ASSERT_EQUAL_UINT8(TileAnim::kFull, a.level(1));
+}
+
+void test_anim_ignores_bits_above_12() {
+  TileAnim a;
+  a.onKeys(0xF000, 0xF000, 0);
+  TEST_ASSERT_EQUAL_HEX16(0, a.tick(0));
+}
+
+// --- blend565: RGB565 mix, num/den of b ---
+
+void test_blend_endpoints_and_half() {
+  TEST_ASSERT_EQUAL_HEX16(0x0000, blend565(0x0000, 0xFFFF, 0, 4));
+  TEST_ASSERT_EQUAL_HEX16(0xFFFF, blend565(0x0000, 0xFFFF, 4, 4));
+  TEST_ASSERT_EQUAL_HEX16(0x7800, blend565(0x0000, 0xF800, 2, 4));  // red 31 * 2/4 = 15
+  TEST_ASSERT_EQUAL_HEX16(0x03E0, blend565(0x0000, 0x07E0, 2, 4));  // green 63 * 2/4 = 31
+}
+
 int main(int, char **) {
   UNITY_BEGIN();
   RUN_TEST(test_label_default_fkey_uppercased);
@@ -141,5 +225,13 @@ int main(int, char **) {
   RUN_TEST(test_wrap_uses_glyph_widths);
   RUN_TEST(test_wrap_empty);
   RUN_TEST(test_wrap_longest_value_stays_in_buffers);
+  RUN_TEST(test_anim_idle_nothing_dirty);
+  RUN_TEST(test_anim_press_fills_tile_once);
+  RUN_TEST(test_anim_release_fades_in_steps);
+  RUN_TEST(test_anim_steps_between_frames_merge);
+  RUN_TEST(test_anim_failed_press_until_next_good_press);
+  RUN_TEST(test_anim_press_during_fade_refills);
+  RUN_TEST(test_anim_ignores_bits_above_12);
+  RUN_TEST(test_blend_endpoints_and_half);
   return UNITY_END();
 }

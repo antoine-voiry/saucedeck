@@ -412,6 +412,23 @@ void test_deck_knob1_mutes_again_when_nothing_pending() {
   TEST_ASSERT_TRUE(has(a, ActionType::Consumer, (uint8_t)ConsumerCode::Mute));
 }
 
+void test_deck_keys_held_tracks_debounced_keys() {
+  Deck d;
+  uint32_t t = 0;
+  hold(d, (1u << 3) | (1u << 7), t);
+  TEST_ASSERT_EQUAL_HEX16((1u << 3) | (1u << 7), d.keysHeld());
+  hold(d, (1u << 3) | DECK_ENC1_SW, t);
+  TEST_ASSERT_EQUAL_HEX16(1u << 3, d.keysHeld());  // knob switches are not keys
+}
+
+void test_helper_missing_keys_mask() {
+  ActionList a;
+  a.push(ActionType::HelperMissing, 2);
+  a.push(ActionType::HelperMissing, 0xFF);  // knob 2 gesture, not a tile
+  a.push(ActionType::KeyDown, 5);
+  TEST_ASSERT_EQUAL_HEX16(1u << 2, helperMissingKeys(a));
+}
+
 int main(int, char **) {
   UNITY_BEGIN();
   RUN_TEST(test_deck_key_press_and_release);
@@ -446,5 +463,7 @@ int main(int, char **) {
   RUN_TEST(test_deck_stage_times_out_and_discards);
   RUN_TEST(test_deck_new_stage_replaces_and_restarts_window);
   RUN_TEST(test_deck_knob1_mutes_again_when_nothing_pending);
+  RUN_TEST(test_deck_keys_held_tracks_debounced_keys);
+  RUN_TEST(test_helper_missing_keys_mask);
   return UNITY_END();
 }
