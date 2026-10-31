@@ -5,6 +5,7 @@
 #include <Adafruit_ST7789.h>
 #include <Fonts/FreeSans9pt7b.h>
 #include "driver/gpio.h"
+#include "deck_clock.h"
 #include "legend.h"
 #include "pins.h"
 
@@ -24,6 +25,8 @@ static constexpr int16_t kTextW = kTileW - kStripeW - 2 * kLabelPad;  // 71 px p
 static constexpr int16_t kLine1Y = 190, kLine2Y = 214, kLine2H = 26;
 static constexpr int16_t kBarX = 4, kBarW = 120, kBarH = 18;  // outline; interior 1 px inside
 static constexpr int16_t kPctX = 132, kMicX = 204;
+static constexpr int16_t kTopTextX = 72, kTopTextW = 212;          // slot 0 text, up to the dots
+static constexpr int16_t kCardTextX = 28, kCardTextW = 248, kIdxX = 280;
 
 static constexpr uint16_t kBg = ST77XX_BLACK;
 static constexpr uint16_t kFg = ST77XX_WHITE;
@@ -35,6 +38,16 @@ static constexpr uint16_t kGreen = 0x07E0;
 static constexpr uint16_t kBlue = 0x041F;
 static constexpr uint16_t kPurple = 0xA01F;
 static constexpr uint16_t kOrange = 0xFD20;  // failed press (helper not running)
+
+// CARD icon ids (spec 4.4): coloured box with a letter. 0 = none.
+struct CardIcon {
+  uint16_t color;
+  char letter;
+};
+static const CardIcon kIcons[kCardIcons] = {
+    {kBg, ' '},     {kPurple, 'M'}, {kBlue, 'C'},  {kGreen, '%'},
+    {0xFFE0, 'W'},  {kOrange, '@'}, {0x07FF, 'T'}, {kGreen, 'B'},
+};
 
 static Adafruit_ST7789 tft(&SPI, TFT_CS_PIN, TFT_DC_PIN, TFT_RST_PIN);
 static ScreenModel model;
@@ -91,8 +104,24 @@ static void drawTile(uint8_t i, const KeyEntry &e, uint8_t level, bool failed) {
   tft.setFont(nullptr);
 }
 
-static void drawTopBar(const ScreenState &s) {
+static void drawTopBar(const ScreenState &s, const StatusBoard &status) {
   tft.fillRect(0, 0, kW, kTopH, kBg);
+  char hhmm[6];
+  formatHhmm(s.clockMinute, hhmm);
+  tft.setTextSize(2);
+  tft.setTextColor(kFg, kBg);
+  tft.setCursor(4, 2);
+  tft.print(hhmm);
+  if (const StatusCard *c = status.top()) {
+    char line[kCardTextMax + 1];
+    fitLine(c->text, kTopTextW, glyphAdvance, line, sizeof line);
+    tft.setFont(&FreeSans9pt7b);
+    tft.setTextSize(1);
+    tft.setTextColor(kFg, kFg);
+    tft.setCursor(kTopTextX, 15);
+    tft.print(line);
+    tft.setFont(nullptr);
+  }
   tft.fillCircle(296, 10, 5, s.helperPresent ? kGreen : kGrey);
   if (s.wifiOn) tft.fillCircle(310, 10, 5, kBlue);
 }
@@ -165,7 +194,7 @@ static char wifiInfo[28] = "";
 void displaySetWifiInfo(const char *info) { snprintf(wifiInfo, sizeof wifiInfo, "%s", info); }
 void displaySetApPassword(const char *p) { snprintf(apPassword, sizeof apPassword, "%s", p); }
 
-// Strip line 2. Plan 2 shares this line with status cards (banner wins).
+// Banner text on strip line 2 (drawLine2 decides banner vs card).
 static void drawBanner(uint8_t b, uint8_t arg) {
   tft.fillRect(0, kLine2Y, kW, kLine2H, kBg);
   if (b == BANNER_NONE) return;
@@ -189,7 +218,44 @@ static void drawBanner(uint8_t b, uint8_t arg) {
   tft.print(text);
 }
 
-void displayUpdate(const ScreenState &state, const KeyMap &keys, TileAnim &anim, uint32_t nowMs) {
+static void drawIcon(uint8_t icon, int16_t x, int16_t y) {
+  if (icon == 0 || icon >= kCardIcons) return;
+  tft.fillRoundRect(x, y, 18, 18, 4, kIcons[icon].color);
+  char s[2] = {kIcons[icon].letter, 0};
+  tft.setTextSize(2);
+  tft.setTextColor(kBg, kIcons[icon].color);
+  tft.setCursor(x + 3, y + 2);
+  tft.print(s);
+}
+
+// Strip line 2: a banner wins; otherwise the rotating status card with its n/m index.
+static void drawLine2(const ScreenState &s, const StatusBoard &status) {
+  if (s.banner != BANNER_NONE) {
+    drawBanner(s.banner, s.bannerArg);
+    return;
+  }
+  tft.fillRect(0, kLine2Y, kW, kLine2H, kBg);
+  const StatusCard *c = status.current();
+  if (!c) return;
+  drawIcon(c->icon, 4, kLine2Y + 4);
+  char line[kCardTextMax + 1];
+  fitLine(c->text, kCardTextW, glyphAdvance, line, sizeof line);
+  tft.setFont(&FreeSans9pt7b);
+  tft.setTextSize(1);
+  tft.setTextColor(kFg, kFg);
+  tft.setCursor(kCardTextX, kLine2Y + 19);
+  tft.print(line);
+  tft.setFont(nullptr);
+  char idx[8];
+  snprintf(idx, sizeof idx, "%u/%u", static_cast<unsigned>(status.index()), static_cast<unsigned>(status.count()));
+  tft.setTextSize(2);
+  tft.setTextColor(kGrey, kBg);
+  tft.setCursor(kIdxX, kLine2Y + 5);
+  tft.print(idx);
+}
+
+void displayUpdate(const ScreenState &state, const KeyMap &keys, TileAnim &anim, const StatusBoard &status,
+                   uint32_t nowMs) {
   if (splashing) {
     if (static_cast<int32_t>(nowMs - splashUntil) < 0) return;
     splashing = false;
@@ -202,7 +268,7 @@ void displayUpdate(const ScreenState &state, const KeyMap &keys, TileAnim &anim,
   uint16_t dirty = model.update(state, anim.tick(nowMs));
   if (!dirty) return;
   const ScreenState &cur = model.current();
-  if (dirty & DIRTY_TOPBAR) drawTopBar(cur);
+  if (dirty & DIRTY_TOPBAR) drawTopBar(cur, status);
   if (dirty & DIRTY_TILES) {
     uint16_t m = model.tileMask();
     for (uint8_t i = 0; i < kKeyCount; i++)
@@ -212,7 +278,7 @@ void displayUpdate(const ScreenState &state, const KeyMap &keys, TileAnim &anim,
   else if (dirty & DIRTY_BAR) drawBarDelta(model.previous(), cur);
   if (dirty & DIRTY_VOLUME_TEXT) drawVolumeText(cur);
   if (dirty & DIRTY_MIC) drawMic(cur);
-  if (dirty & DIRTY_BANNER) drawBanner(cur.banner, cur.bannerArg);
+  if (dirty & DIRTY_BANNER) drawLine2(cur, status);
 }
 
 static bool panelAsleep = false;

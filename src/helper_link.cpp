@@ -1,5 +1,6 @@
 // Moves bytes only: framing in deck_core/frame.h, message rules in deck_core/helper_proto.h.
-// Host->deck messages can only update displayed state (HostLink); nothing here runs commands.
+// Host->deck messages can only update displayed state (HostLink, DeckClock, StatusBoard);
+// nothing here runs commands.
 #include "helper_link.h"
 #include <Arduino.h>
 #include "USB.h"
@@ -8,6 +9,8 @@
 
 static HostLink hostLink;
 static FrameReader reader;
+static DeckClock deckClock;
+static StatusBoard statusBoard;
 static uint32_t rejected = 0;  // frames with a valid CRC but an invalid message
 
 void helperBegin() {
@@ -21,12 +24,18 @@ void helperPoll(uint32_t nowMs) {
   while (Serial.available() > 0 && budget-- > 0) {
     if (!reader.push(static_cast<uint8_t>(Serial.read()), msg)) continue;
     HostMsg m;
+    TimeMsg tm;
+    CardMsg cm;
     if (decodeHost(msg, sizeof msg, m)) hostLink.onMessage(m, nowMs);
+    else if (decodeTime(msg, sizeof msg, tm)) deckClock.onTime(tm.epoch, tm.tzOffsetMin, nowMs);
+    else if (decodeCard(msg, sizeof msg, cm)) statusBoard.onCard(cm, nowMs);
     else rejected++;
   }
 }
 
 const HostLink &helperLink() { return hostLink; }
+const DeckClock &helperClock() { return deckClock; }
+StatusBoard &helperStatus() { return statusBoard; }
 
 static void send(const uint8_t *msg, size_t n) {
   if (n != kReportSize) return;

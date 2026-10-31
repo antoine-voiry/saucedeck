@@ -195,6 +195,9 @@ void loop() {
   ledsSetDim(dim);
   displaySetDim(dim);
 
+  StatusBoard &status = helperStatus();
+  if (!hl.present(now)) status.clear();  // cards are only true while the helper runs
+  status.tick(now);
   // Helper connected: show the Mac's real volume / mic; otherwise the deck's own count
   const VolumeState &spk = deck.speaker();
   bool live = hl.present(now) && hl.hasVolume();
@@ -231,7 +234,8 @@ void loop() {
   } else if (brownoutNotice && now < 8000) {
     banner = BANNER_BROWNOUT;
   }
-  displayUpdate({pct, spkMuted, micMuted, micKnown, micPct, banner, arg, keymapGen, hl.present(now), wifi.on(), -1, 0},
-                deck.keyMap(), tileAnim, now);
+  displayUpdate({pct, spkMuted, micMuted, micKnown, micPct, banner, arg, keymapGen, hl.present(now), wifi.on(),
+                 helperClock().minuteOfDay(now), status.gen()},
+                deck.keyMap(), tileAnim, status, now);
   ledsUpdate({pct, spkMuted, micMuted}, now);
 }
