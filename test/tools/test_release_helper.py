@@ -31,6 +31,16 @@ class ReleaseTest(unittest.TestCase):
         self.assertEqual(calls, [(["/opt/homebrew/bin/hs", "-t", "2", "-c", "saucedeck.release()"],
                                   {"timeout": 5, "capture_output": True})])
 
+    def test_seconds(self):
+        calls = []
+
+        def run(cmd, **kw):
+            calls.append(cmd)
+            return Result(0)
+
+        self.assertTrue(release_helper.release(which=lambda n: "hs", run=run, seconds=600))
+        self.assertEqual(calls, [["hs", "-t", "2", "-c", "saucedeck.release(600)"]])
+
     def test_nonzero(self):
         self.assertFalse(release_helper.release(which=lambda n: "hs", run=lambda c, **k: Result(1)))
 

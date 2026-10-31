@@ -56,3 +56,5 @@
 - `hs.itunes` targets app "iTunes"; on macOS 10.15+ the app is Music, so the music slot-1 fallback may never match. `hs.spotify` calls are synchronous AppleScript on the Hammerspoon main thread every 5 s. [unverified: check on bench]
 - `hs.serial` open asserts DTR/RTS. Check on bench that it does not reset the deck (Arduino USBCDC line-state reset detection). [unverified: check on bench]
 - Whether the PlatformIO `pre:` `AddPreAction("upload")` hook (tools/release_helper.py) runs before the espressif 1200 bps touch. [unverified: check with `pio run -t upload -v`]
+- `[env:bringup]` overrides `USB_PRODUCT` to `SAUCEDECK-BRINGUP` (saucedeck env stays `SAUCEDECK`) so the Mac helper skips it. [unverified: not bench-verified, check `system_profiler SPUSBDataType`]
+- `hs.serial.availablePortNames()` returns names like `usbmodem…` (no `/dev/cu.` prefix); `core:pickPort` and the port-loss check rely on it. [unverified: check on bench]

@@ -121,9 +121,19 @@ function M:onDeck(msg63)
   return {}
 end
 
-function M:release(now)
+function M:release(now, seconds)
   self.isConnected = false
-  self.pausedUntil = now + RELEASE_PAUSE
+  self.pausedUntil = now + (seconds or RELEASE_PAUSE)
+end
+
+function M:resume() self.pausedUntil = 0 end
+
+-- True only when a device with productName exactly "SAUCEDECK" is on USB (not SAUCEDECK-BRINGUP).
+function M:deckAttached(devices)
+  for _, d in ipairs(devices or {}) do
+    if d.productName == "SAUCEDECK" then return true end
+  end
+  return false
 end
 
 function M:paused(now) return now < self.pausedUntil end

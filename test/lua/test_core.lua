@@ -86,4 +86,26 @@ t.release_pauses_60s = function(T)
   T.eq(c:connected(), false); T.ok(c:paused(5)); T.ok(c:paused(64.9)); T.eq(c:paused(65), false)
   T.eq(#c:tick(6), 0)
 end
+t.deck_attached_exact_product = function(T)
+  local c = new()
+  T.eq(c:deckAttached({ { productName = "SAUCEDECK" } }), true)
+  T.eq(c:deckAttached({ { productName = "Keyboard" }, { productName = "SAUCEDECK" } }), true)
+  T.eq(c:deckAttached({ { productName = "SAUCEDECK-BRINGUP" } }), false)
+  T.eq(c:deckAttached({ { productName = "saucedeck" } }), false)
+  T.eq(c:deckAttached({ {} }), false)
+  T.eq(c:deckAttached({}), false)
+  T.eq(c:deckAttached(nil), false)
+end
+t.release_custom_seconds = function(T)
+  local c = new(); c:connect(0)
+  c:release(5, 3600)
+  T.ok(c:paused(3604)); T.eq(c:paused(3605), false)
+end
+t.resume_clears_pause = function(T)
+  local c = new()
+  c:release(5, 3600)
+  T.ok(c:paused(6))
+  c:resume()
+  T.eq(c:paused(6), false)
+end
 return t

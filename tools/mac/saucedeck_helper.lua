@@ -29,11 +29,11 @@ end
 
 local core = Core.new{ clock = function() return os.time(), tzMinutes() end, version = 1 }
 local reader = proto.reader()
-local port, timers, running = nil, {}, {} -- running: live hs.task objects (Hammerspoon may GC unreferenced ones)
+local port, portName, timers, running = nil, nil, {}, {} -- running: live hs.task objects (Hammerspoon may GC unreferenced ones)
 
 local function closePort()
   if port then pcall(function() port:close() end) end
-  port = nil
+  port, portName = nil, nil
 end
 
 local function disconnect()
@@ -72,7 +72,7 @@ local function onSerial(_, msg, data)
     for _, m in ipairs(reader:push(data or "")) do
       for _, c in ipairs(core:onDeck(m)) do pcall(runCommand, c) end
     end
-  elseif msg == "removed" then
+  elseif msg == "removed" or msg == "closed" or msg == "error" then
     disconnect()
   end
 end
@@ -85,14 +85,15 @@ local function pollAudio()
 end
 
 local function tryConnect()
+  if not core:deckAttached(hs.usb.attachedDevices()) then return end
   local name = core:pickPort(hs.serial.availablePortNames())
   if not name then return end
   local p = hs.serial.newFromName(name)
   if not p then return end
   p:baudRate(BAUD):callback(onSerial)
   local ok = p:open()
-  if not ok then return end
-  port = p
+  if not ok then pcall(p.close, p); return end
+  port, portName = p, name
   reader = proto.reader()
   pollAudio() -- seed levels so connect() sends them and mic deltas start from the real value
   send(core:connect(now()))
@@ -101,6 +102,14 @@ end
 local function everySecond()
   local t = now()
   if core:connected() then
+    local gone = true
+    for _, n in ipairs(hs.serial.availablePortNames()) do
+      if n == portName then gone = false end
+    end
+    if not port or not port:isOpen() or gone then
+      disconnect()
+      return
+    end
     send(core:tick(t))
   elseif not core:paused(t) then
     tryConnect()
@@ -132,9 +141,17 @@ end
 
 local function refreshMusic()
   setCard(1, ICON.music, function()
-    for _, app in ipairs({ hs.spotify, hs.itunes }) do
-      if app.isPlaying() then
-        return cards.nowPlaying(app.getCurrentArtist(), app.getCurrentTrack(), true)
+    local players = {
+      { "Spotify", hs.spotify },
+      { "Music", hs.itunes },
+      { "iTunes", hs.itunes },
+    }
+    for _, pl in ipairs(players) do
+      if hs.application.get(pl[1]) then
+        local app = pl[2]
+        if app.isPlaying() then
+          return cards.nowPlaying(app.getCurrentArtist(), app.getCurrentTrack(), true)
+        end
       end
     end
     return nil
@@ -175,10 +192,16 @@ end
 
 local api = {}
 
-function api.release()
-  core:release(now())
+function api.release(seconds)
+  seconds = tonumber(seconds) or 60
+  core:release(now(), seconds)
   closePort()
-  hs.alert.show("SAUCEDECK helper paused 60 s")
+  hs.alert.show("SAUCEDECK helper paused " .. seconds .. " s")
+end
+
+function api.resume()
+  core:resume()
+  hs.alert.show("SAUCEDECK helper resumed")
 end
 
 function api.status()

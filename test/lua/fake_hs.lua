@@ -20,13 +20,26 @@ return function(opts)
     defaultInputDevice = function() return hs.inDev end,
   }
 
+  hs.devices = opts.devices or { { productName = "SAUCEDECK" } }
+  hs.usb = { attachedDevices = function() return hs.devices end }
+  hs.runningApps = opts.apps or {}
+  hs.appQueries = {}
+  hs.application = { get = function(name) hs.appQueries[#hs.appQueries + 1] = name; return hs.runningApps[name] and { name = name } or nil end }
+  hs.musicCalls = 0
+  hs.portIsOpen = true
+  hs.openFails = opts.openFails
   hs.serial = {
     availablePortNames = function() return hs.ports end,
     newFromName = function(name)
       local p = { name = name }
       function p:baudRate(b) self.baud = b; return self end
       function p:callback(fn) hs.serialCallback = fn; return self end
-      function p:open() hs.opened[#hs.opened + 1] = { name = name, baud = self.baud }; return self end
+      function p:open()
+        hs.opened[#hs.opened + 1] = { name = name, baud = self.baud }
+        if hs.openFails then return nil end
+        return self
+      end
+      function p:isOpen() return hs.portIsOpen end
       function p:close() hs.closed = hs.closed + 1; return self end
       function p:sendData(d) hs.sent[#hs.sent + 1] = d; return self end
       return p
@@ -53,8 +66,9 @@ return function(opts)
     return t
   end }
   hs.http = { asyncGet = function() end }
-  hs.spotify = { isPlaying = function() return false end, getCurrentArtist = function() end, getCurrentTrack = function() end }
-  hs.itunes = { isPlaying = function() return false end, getCurrentArtist = function() end, getCurrentTrack = function() end }
+  local function music() return { isPlaying = function() hs.musicCalls = hs.musicCalls + 1; return false end, getCurrentArtist = function() end, getCurrentTrack = function() end } end
+  hs.spotify = music()
+  hs.itunes = music()
   hs.host = {
     cpuUsage = function() return { overall = { active = 12.3 } } end,
     vmStat = function() return {} end,

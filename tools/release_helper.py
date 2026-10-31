@@ -6,12 +6,13 @@ helper holds it. Missing `hs` CLI or helper -> upload proceeds as before.
 import shutil, subprocess, time
 
 
-def release(which=shutil.which, run=subprocess.run):
+def release(which=shutil.which, run=subprocess.run, seconds=None):
     hs = which("hs")
     if not hs:
         return False
+    call = "saucedeck.release()" if seconds is None else "saucedeck.release(%d)" % seconds
     try:
-        r = run([hs, "-t", "2", "-c", "saucedeck.release()"], timeout=5, capture_output=True)
+        r = run([hs, "-t", "2", "-c", call], timeout=5, capture_output=True)
     except (subprocess.TimeoutExpired, OSError):
         return False
     return r.returncode == 0

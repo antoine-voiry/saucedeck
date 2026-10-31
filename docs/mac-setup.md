@@ -70,6 +70,11 @@ Card slots (a source that fails or has nothing to show clears its slot):
 | 4 | Weather (wttr.in) | 15 min |
 | 5 | Unread badge counts for Mail and Telegram (lsappinfo) | 30 s |
 
+The helper connects only to a USB device whose product name is exactly `SAUCEDECK` (the bring-up
+firmware enumerates as `SAUCEDECK-BRINGUP` and is ignored). `tools/bench.py` releases the port
+automatically (10 min) before opening it. Before `pio device monitor`, run
+`hs -c 'saucedeck.release(3600)'`; afterwards run `hs -c 'saucedeck.resume()'`.
+
 Uploading: `pio run -t upload` calls `tools/release_helper.py`, which runs `hs -c "saucedeck.release()"`
 when the `hs` CLI exists. The helper closes the port and stays away for 60 s. Without the `hs` CLI,
 quit Hammerspoon or run `saucedeck.release()` in its console before flashing. `saucedeck.status()`
