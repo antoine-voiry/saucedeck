@@ -321,21 +321,72 @@ void test_decode_card_rejects() {
 void test_decode_status_fuzz_never_accepts_out_of_range() {
   srand(12345);
   uint8_t b[kReportSize];
+  int cardOk = 0, cardNo = 0, timeOk = 0, timeNo = 0;
   for (int it = 0; it < 20000; it++) {
     for (size_t i = 0; i < kReportSize; i++) b[i] = static_cast<uint8_t>(rand());
     b[0] = kProtoVersion;
-    b[1] = (it & 1) ? MSG_CARD : MSG_TIME;
-    if (it % 3 == 0) b[2] = static_cast<uint8_t>(5 + (b[7] % 50));  // make len plausible
+    if (it & 1) {
+      // CARD: mostly well-formed so the accept path runs.
+      b[1] = MSG_CARD;
+      b[3] &= 7;                                        // slot 0..7
+      b[4] &= 7;                                        // icon 0..7
+      uint8_t tlen = static_cast<uint8_t>(rand() % 50);  // 0..49, incl. one past max
+      b[7] = tlen;
+      b[2] = static_cast<uint8_t>(5 + tlen);
+      if (it % 4 != 3)                                  // 3 of 4: printable text
+        for (uint8_t k = 0; k < tlen; k++) b[8 + k] = static_cast<uint8_t>(0x20 + rand() % 95);
+      if (rand() % 8 == 0) {                            // 1 in 8: out-of-range perturbation
+        switch (rand() % 3) {
+          case 0: b[2] = static_cast<uint8_t>(b[2] + 1); break;
+          case 1: b[3] = static_cast<uint8_t>(8 + rand() % 248); break;
+          default: b[4] = static_cast<uint8_t>(8 + rand() % 248); break;
+        }
+      }
+    } else {
+      // TIME: len 6 most of the time; tz across -1000..+1000 (accepted: -720..840).
+      b[1] = MSG_TIME;
+      if (rand() % 8 != 0) b[2] = 6;
+      int tz = rand() % 2001 - 1000;
+      uint16_t u = static_cast<uint16_t>(static_cast<int16_t>(tz));
+      b[7] = static_cast<uint8_t>(u & 0xFF);
+      b[8] = static_cast<uint8_t>(u >> 8);
+    }
     CardMsg c;
     if (decodeCard(b, kReportSize, c)) {
+      TEST_ASSERT_EQUAL(MSG_CARD, b[1]);
+      cardOk++;
       TEST_ASSERT_TRUE(c.slot < kCardSlots && c.icon < kCardIcons);
       size_t n = strlen(c.text);
       TEST_ASSERT_TRUE(n <= kCardTextMax);
       for (size_t k = 0; k < n; k++) TEST_ASSERT_TRUE(c.text[k] >= 0x20 && c.text[k] <= 0x7E);
+    } else if (b[1] == MSG_CARD) {
+      cardNo++;
     }
     TimeMsg t;
-    if (decodeTime(b, kReportSize, t)) TEST_ASSERT_TRUE(t.tzOffsetMin >= -720 && t.tzOffsetMin <= 840);
+    if (decodeTime(b, kReportSize, t)) {
+      TEST_ASSERT_EQUAL(MSG_TIME, b[1]);
+      timeOk++;
+      TEST_ASSERT_TRUE(t.tzOffsetMin >= -720 && t.tzOffsetMin <= 840);
+    } else if (b[1] == MSG_TIME) {
+      timeNo++;
+    }
   }
+  TEST_ASSERT_TRUE(cardOk > 0 && cardNo > 0);
+  TEST_ASSERT_TRUE(timeOk > 0 && timeNo > 0);
+}
+
+void test_decode_card_rejects_short_buffer() {
+  uint8_t b[kReportSize];
+  CardMsg c;
+  char text48[kCardTextMax + 1];
+  memset(text48, 'x', kCardTextMax);
+  text48[kCardTextMax] = 0;
+  cardMsg(b, 1, 1, 0, text48);  // len 53, full frame = 56 bytes
+  TEST_ASSERT_FALSE(decodeCard(b, 7, c));    // n < 8 header
+  TEST_ASSERT_FALSE(decodeCard(b, 10, c));   // n < 3 + len
+  TEST_ASSERT_FALSE(decodeCard(b, 55, c));   // one byte short
+  TEST_ASSERT_TRUE(decodeCard(b, 56, c));    // exact frame accepted
+  TEST_ASSERT_EQUAL_size_t(kCardTextMax, strlen(c.text));
 }
 
 int main(int, char **) {
@@ -363,6 +414,7 @@ int main(int, char **) {
   RUN_TEST(test_decode_time_rejects);
   RUN_TEST(test_decode_card);
   RUN_TEST(test_decode_card_rejects);
+  RUN_TEST(test_decode_card_rejects_short_buffer);
   RUN_TEST(test_decode_status_fuzz_never_accepts_out_of_range);
   return UNITY_END();
 }
