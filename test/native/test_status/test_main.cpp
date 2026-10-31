@@ -160,18 +160,63 @@ void test_board_current_cleared_moves_on_without_waiting() {
   TEST_ASSERT_EQUAL_UINT8(1, b.count());
 }
 
-void test_board_gen_changes_only_when_shown_content_changes() {
+void test_board_gens_change_only_when_their_content_changes() {
   StatusBoard b;
-  uint8_t g0 = b.gen();
+  uint8_t t0 = b.topGen(), s0 = b.stripGen();
   b.onCard(card(1, "A"), 0);
   b.tick(0);
-  uint8_t g1 = b.gen();
-  TEST_ASSERT_NOT_EQUAL(g0, g1);
+  uint8_t s1 = b.stripGen();
+  TEST_ASSERT_NOT_EQUAL(s0, s1);
+  TEST_ASSERT_EQUAL_UINT8(t0, b.topGen());
   b.onCard(card(1, "A"), 1000);  // same content resent
   b.tick(1000);
-  TEST_ASSERT_EQUAL_UINT8(g1, b.gen());
-  b.onCard(card(1, "A2"), 2000);
-  TEST_ASSERT_NOT_EQUAL(g1, b.gen());
+  TEST_ASSERT_EQUAL_UINT8(s1, b.stripGen());
+  TEST_ASSERT_EQUAL_UINT8(t0, b.topGen());
+  b.onCard(card(1, "A2"), 2000);  // current card text changed
+  TEST_ASSERT_NOT_EQUAL(s1, b.stripGen());
+  TEST_ASSERT_EQUAL_UINT8(t0, b.topGen());
+}
+
+void test_board_rotation_changes_strip_not_top() {
+  StatusBoard b;
+  b.onCard(card(0, "T"), 0);
+  b.onCard(card(1, "A"), 0);
+  b.onCard(card(2, "B"), 0);
+  b.tick(0);
+  uint8_t t = b.topGen(), s = b.stripGen();
+  b.tick(StatusBoard::kRotateMs);
+  TEST_ASSERT_EQUAL_STRING("B", b.current()->text);
+  TEST_ASSERT_NOT_EQUAL(s, b.stripGen());
+  TEST_ASSERT_EQUAL_UINT8(t, b.topGen());
+}
+
+void test_board_slot0_changes_top_not_strip() {
+  StatusBoard b;
+  b.onCard(card(1, "A"), 0);
+  b.tick(0);
+  uint8_t t = b.topGen(), s = b.stripGen();
+  b.onCard(card(0, "T1"), 10);
+  TEST_ASSERT_NOT_EQUAL(t, b.topGen());
+  TEST_ASSERT_EQUAL_UINT8(s, b.stripGen());
+  t = b.topGen();
+  b.onCard(card(0, "T1"), 20);  // identical resend
+  TEST_ASSERT_EQUAL_UINT8(t, b.topGen());
+  b.onCard(card(0, ""), 30);  // cleared
+  TEST_ASSERT_NOT_EQUAL(t, b.topGen());
+  TEST_ASSERT_EQUAL_UINT8(s, b.stripGen());
+}
+
+void test_board_non_current_card_text_leaves_strip_alone() {
+  StatusBoard b;
+  b.onCard(card(1, "A"), 0);
+  b.onCard(card(2, "B"), 0);
+  b.tick(0);  // current = A
+  uint8_t s = b.stripGen();
+  b.onCard(card(2, "B2"), 100);  // not shown, count/index unchanged
+  b.tick(100);
+  TEST_ASSERT_EQUAL_UINT8(s, b.stripGen());
+  b.onCard(card(3, "C"), 200);  // count 2 -> 3 changes the n/m label
+  TEST_ASSERT_NOT_EQUAL(s, b.stripGen());
 }
 
 void test_board_clear_is_idempotent() {
@@ -179,23 +224,27 @@ void test_board_clear_is_idempotent() {
   b.onCard(card(0, "T"), 0);
   b.onCard(card(1, "A"), 0);
   b.tick(0);
-  uint8_t g = b.gen();
+  uint8_t t = b.topGen(), s = b.stripGen();
   b.clear();
   TEST_ASSERT_NULL(b.top());
   TEST_ASSERT_NULL(b.current());
-  TEST_ASSERT_NOT_EQUAL(g, b.gen());
-  g = b.gen();
+  TEST_ASSERT_NOT_EQUAL(t, b.topGen());
+  TEST_ASSERT_NOT_EQUAL(s, b.stripGen());
+  t = b.topGen();
+  s = b.stripGen();
   b.clear();
   b.tick(10);
-  TEST_ASSERT_EQUAL_UINT8(g, b.gen());
+  TEST_ASSERT_EQUAL_UINT8(t, b.topGen());
+  TEST_ASSERT_EQUAL_UINT8(s, b.stripGen());
 }
 
 void test_board_ignores_bad_slot() {
   StatusBoard b;
-  uint8_t g = b.gen();
+  uint8_t t = b.topGen(), s = b.stripGen();
   b.onCard(card(kCardSlots, "X"), 0);
   b.tick(0);
-  TEST_ASSERT_EQUAL_UINT8(g, b.gen());
+  TEST_ASSERT_EQUAL_UINT8(t, b.topGen());
+  TEST_ASSERT_EQUAL_UINT8(s, b.stripGen());
   TEST_ASSERT_NULL(b.current());
 }
 
@@ -215,7 +264,10 @@ int main(int, char **) {
   RUN_TEST(test_board_resend_refreshes_ttl);
   RUN_TEST(test_board_empty_text_clears_slot);
   RUN_TEST(test_board_current_cleared_moves_on_without_waiting);
-  RUN_TEST(test_board_gen_changes_only_when_shown_content_changes);
+  RUN_TEST(test_board_gens_change_only_when_their_content_changes);
+  RUN_TEST(test_board_rotation_changes_strip_not_top);
+  RUN_TEST(test_board_slot0_changes_top_not_strip);
+  RUN_TEST(test_board_non_current_card_text_leaves_strip_alone);
   RUN_TEST(test_board_clear_is_idempotent);
   RUN_TEST(test_board_ignores_bad_slot);
   return UNITY_END();

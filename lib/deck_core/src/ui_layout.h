@@ -24,7 +24,8 @@ struct ScreenState {
   bool helperPresent;  // top bar dot
   bool wifiOn;         // top bar dot
   int16_t clockMinute;  // local minute of day, -1 = unknown (top bar clock)
-  uint8_t statusGen;    // StatusBoard::gen(): top bar text or strip card changed
+  uint8_t topGen;       // StatusBoard::topGen(): slot 0 text changed
+  uint8_t stripGen;     // StatusBoard::stripGen(): line 2 card (text, n/m) changed
 };
 
 enum : uint16_t {
@@ -78,7 +79,9 @@ class ScreenModel {
       if (next.banner != cur_.banner || next.bannerArg != cur_.bannerArg) dirty |= DIRTY_BANNER;
       if (next.helperPresent != cur_.helperPresent || next.wifiOn != cur_.wifiOn) dirty |= DIRTY_TOPBAR;
       if (next.clockMinute != cur_.clockMinute) dirty |= DIRTY_TOPBAR;
-      if (next.statusGen != cur_.statusGen) dirty |= DIRTY_TOPBAR | DIRTY_BANNER;
+      if (next.topGen != cur_.topGen) dirty |= DIRTY_TOPBAR;
+      // A banner owns line 2; its own change sets DIRTY_BANNER, so the card reappears then.
+      if (next.stripGen != cur_.stripGen && next.banner == BANNER_NONE) dirty |= DIRTY_BANNER;
       if (next.keymapGen != cur_.keymapGen) tiles_ = kAllTiles;
       if (tiles_) dirty |= DIRTY_TILES;
     }

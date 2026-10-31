@@ -236,6 +236,10 @@ void test_label_rejections_leave_label_unchanged() {
   TEST_ASSERT_EQUAL(KeyMapError::NotPrintable, m.setLabel(1, "Ma\x01il"));
   TEST_ASSERT_EQUAL(KeyMapError::NotPrintable, m.setLabel(1, "Caf\xC3\xA9"));  // UTF-8
   TEST_ASSERT_EQUAL(KeyMapError::BadIndex, m.setLabel(12, "x"));
+  // WiFiManager inserts param values into HTML unescaped.
+  const char *const kBad[] = {"a\"b", "a<b", "a>b", "a&b"};
+  for (const char *bad : kBad)
+    TEST_ASSERT_EQUAL(KeyMapError::NotPrintable, m.setLabel(1, bad));
   TEST_ASSERT_EQUAL_STRING("Mail", m.entry(1).label);
   TEST_ASSERT_EQUAL(KeyMapError::None, m.setLabel(1, "abcdefghijklmnop"));  // 16 = max
 }

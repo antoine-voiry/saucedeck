@@ -120,12 +120,31 @@ void test_model_clock_minute_marks_top_bar() {
   TEST_ASSERT_EQUAL_HEX16(DIRTY_TOPBAR, m.update(s, 0));
 }
 
-void test_model_status_gen_marks_top_bar_and_line2() {
+void test_model_top_gen_marks_top_bar_only() {
   ScreenModel m;
   m.update(base(), 0);
   ScreenState s = base();
-  s.statusGen = 1;
-  TEST_ASSERT_EQUAL_HEX16(DIRTY_TOPBAR | DIRTY_BANNER, m.update(s, 0));
+  s.topGen = 1;
+  TEST_ASSERT_EQUAL_HEX16(DIRTY_TOPBAR, m.update(s, 0));
+}
+
+void test_model_strip_gen_marks_line2_when_no_banner() {
+  ScreenModel m;
+  m.update(base(), 0);
+  ScreenState s = base();
+  s.stripGen = 1;
+  TEST_ASSERT_EQUAL_HEX16(DIRTY_BANNER, m.update(s, 0));
+}
+
+void test_model_strip_gen_ignored_while_banner_shown() {
+  ScreenModel m;
+  ScreenState s = base();
+  s.banner = BANNER_BROWNOUT;
+  m.update(s, 0);
+  s.stripGen = 1;
+  TEST_ASSERT_EQUAL_HEX16(DIRTY_NONE, m.update(s, 0));
+  s.banner = BANNER_NONE;  // banner clears: card reappears via the banner change
+  TEST_ASSERT_EQUAL_HEX16(DIRTY_BANNER, m.update(s, 0));
 }
 
 void test_model_tile_changes_pass_through() {
@@ -211,7 +230,9 @@ int main(int, char **) {
   RUN_TEST(test_model_banner_change_marks_banner);
   RUN_TEST(test_model_helper_and_wifi_mark_top_bar);
   RUN_TEST(test_model_clock_minute_marks_top_bar);
-  RUN_TEST(test_model_status_gen_marks_top_bar_and_line2);
+  RUN_TEST(test_model_top_gen_marks_top_bar_only);
+  RUN_TEST(test_model_strip_gen_marks_line2_when_no_banner);
+  RUN_TEST(test_model_strip_gen_ignored_while_banner_shown);
   RUN_TEST(test_model_tile_changes_pass_through);
   RUN_TEST(test_model_keymap_change_repaints_every_tile);
   RUN_TEST(test_model_previous_tracks_last_drawn);

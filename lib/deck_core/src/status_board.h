@@ -20,50 +20,41 @@ class StatusBoard {
     if (c.slot >= kCardSlots) return;
     Slot &s = slots_[c.slot];
     if (c.text[0] == 0) {
-      if (s.live) gen_++;
       s.live = false;
+      refreshGens();
       return;
     }
-    bool same = s.live && s.card.icon == c.icon && strcmp(s.card.text, c.text) == 0;
     s.live = true;
     s.card.icon = c.icon;
     memcpy(s.card.text, c.text, sizeof s.card.text);
     s.expires = c.ttlS != 0;
     s.expiresAt = nowMs + static_cast<uint32_t>(c.ttlS) * 1000u;
-    if (!same) gen_++;
+    refreshGens();
   }
 
   void clear() {
-    bool any = false;
-    for (Slot &s : slots_) {
-      any = any || s.live;
-      s.live = false;
-    }
-    if (any) gen_++;
+    for (Slot &s : slots_) s.live = false;
     cur_ = 0;
+    refreshGens();
   }
 
   void tick(uint32_t nowMs) {
     for (Slot &s : slots_)
       if (s.live && s.expires && static_cast<int32_t>(nowMs - s.expiresAt) >= 0) {
         s.live = false;
-        gen_++;
       }
     if (cur_ == 0 || !slots_[cur_].live) {
       uint8_t n = next(cur_);
       if (n != cur_) {
         cur_ = n;
         shownAt_ = nowMs;
-        gen_++;
       }
     } else if (nowMs - shownAt_ >= kRotateMs) {
       uint8_t n = next(cur_);
       shownAt_ = nowMs;
-      if (n != cur_) {
-        cur_ = n;
-        gen_++;
-      }
+      cur_ = n;
     }
+    refreshGens();
   }
 
   const StatusCard *top() const { return slots_[0].live ? &slots_[0].card : nullptr; }
@@ -82,7 +73,8 @@ class StatusBoard {
     return n;
   }
 
-  uint8_t gen() const { return gen_; }
+  uint8_t topGen() const { return topGen_; }
+  uint8_t stripGen() const { return stripGen_; }
 
  private:
   struct Slot {
@@ -102,8 +94,43 @@ class StatusBoard {
     return 0;
   }
 
+  // Snapshots of what each region currently shows; a gen bumps only when its snapshot differs.
+  struct View {
+    bool live = false;
+    StatusCard card{};
+    uint8_t index = 0, count = 0;
+    bool operator==(const View &o) const {
+      return live == o.live && (!live || (card.icon == o.card.icon && strcmp(card.text, o.card.text) == 0)) &&
+             index == o.index && count == o.count;
+    }
+  };
+
+  void refreshGens() {
+    View t;
+    if (top()) {
+      t.live = true;
+      t.card = *top();
+    }
+    if (!(t == top_)) {
+      top_ = t;
+      topGen_++;
+    }
+    View s;
+    if (current()) {
+      s.live = true;
+      s.card = *current();
+    }
+    s.index = index();
+    s.count = count();
+    if (!(s == strip_)) {
+      strip_ = s;
+      stripGen_++;
+    }
+  }
+
   Slot slots_[kCardSlots];
   uint8_t cur_ = 0;
   uint32_t shownAt_ = 0;
-  uint8_t gen_ = 0;
+  View top_, strip_;
+  uint8_t topGen_ = 0, stripGen_ = 0;
 };

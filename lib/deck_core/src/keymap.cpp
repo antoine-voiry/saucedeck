@@ -64,6 +64,10 @@ KeyMapError KeyMap::setLabel(uint8_t i, const char *label) {
   if (n > kKeyLabelMax) return KeyMapError::TooLong;
   for (size_t k = 0; k < n; k++)
     if (label[k] < 0x20 || label[k] > 0x7E) return KeyMapError::NotPrintable;
+  // WiFiManager inserts param values into the portal HTML unescaped: " < > & would break
+  // the form (or inject markup), so labels may not contain them.
+  for (size_t k = 0; k < n; k++)
+    if (label[k] == '"' || label[k] == '<' || label[k] == '>' || label[k] == '&') return KeyMapError::NotPrintable;
   memcpy(entries_[i].label, label, n);
   entries_[i].label[n] = 0;
   return KeyMapError::None;

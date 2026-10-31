@@ -235,7 +235,7 @@ void loop() {
     banner = BANNER_BROWNOUT;
   }
   displayUpdate({pct, spkMuted, micMuted, micKnown, micPct, banner, arg, keymapGen, hl.present(now), wifi.on(),
-                 helperClock().minuteOfDay(now), status.gen()},
+                 helperClock().minuteOfDay(now), status.topGen(), status.stripGen()},
                 deck.keyMap(), tileAnim, status, now);
   ledsUpdate({pct, spkMuted, micMuted}, now);
 }
