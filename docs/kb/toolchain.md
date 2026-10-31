@@ -53,3 +53,6 @@
 - `icalBuddy` output with `-b "" -iep datetime,title -po datetime,title -df "" -tf %H:%M eventsToday` is `HH:MM title` per line. [unverified: check on bench]
 - `lsappinfo info -only StatusLabel Mail|Telegram` prints `"StatusLabel"={ "label"="N" }`; empty/absent label when no badge. [unverified: check on bench]
 - `hs.host.vmStat()` field names used by `cards.ramPercent` (pages active/wired/compressed, pageSize, memSize) match the real table. [unverified: check on bench]
+- `hs.itunes` targets app "iTunes"; on macOS 10.15+ the app is Music, so the music slot-1 fallback may never match. `hs.spotify` calls are synchronous AppleScript on the Hammerspoon main thread every 5 s. [unverified: check on bench]
+- `hs.serial` open asserts DTR/RTS. Check on bench that it does not reset the deck (Arduino USBCDC line-state reset detection). [unverified: check on bench]
+- Whether the PlatformIO `pre:` `AddPreAction("upload")` hook (tools/release_helper.py) runs before the espressif 1200 bps touch. [unverified: check with `pio run -t upload -v`]

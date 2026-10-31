@@ -29,7 +29,7 @@ end
 
 local core = Core.new{ clock = function() return os.time(), tzMinutes() end, version = 1 }
 local reader = proto.reader()
-local port, timers, watchers = nil, {}, {}
+local port, timers, running = nil, {}, {} -- running: live hs.task objects (Hammerspoon may GC unreferenced ones)
 
 local function closePort()
   if port then pcall(function() port:close() end) end
@@ -111,7 +111,13 @@ end
 
 local function runTask(path, args, onDone)
   local ok = pcall(function()
-    hs.task.new(path, function(code, out) onDone(code == 0 and out or nil) end, args):start()
+    local task
+    task = hs.task.new(path, function(code, out)
+      running[task] = nil
+      onDone(code == 0 and out or nil)
+    end, args)
+    running[task] = true
+    task:start()
   end)
   if not ok then onDone(nil) end
 end
@@ -183,8 +189,8 @@ end
 
 function api.stop()
   for _, tm in ipairs(timers) do pcall(function() tm:stop() end) end
-  for _, w in ipairs(watchers) do pcall(function() w:stop() end) end
-  timers, watchers = {}, {}
+  for tk in pairs(running) do pcall(function() tk:terminate() end) end
+  timers, running = {}, {}
   closePort()
   core:disconnect()
 end

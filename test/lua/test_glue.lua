@@ -63,4 +63,21 @@ t.removed_disconnects_and_reconnects = function(T)
   teardown()
 end
 
+t.running_task_survives_gc_and_callback_fires = function(T)
+  local hs = setup({ "usbmodemX" })
+  T.ok(hs.taskCount > 0, "tasks started")
+  collectgarbage(); collectgarbage()
+  local alive = 0
+  for _ in pairs(hs.tasks) do alive = alive + 1 end
+  T.eq(alive, hs.taskCount)
+  local cal = hs.tasks[1]
+  cal.cb(0, "")
+  cal = nil
+  collectgarbage(); collectgarbage()
+  alive = 0
+  for _ in pairs(hs.tasks) do alive = alive + 1 end
+  T.eq(alive, hs.taskCount - 1) -- finished task released
+  teardown()
+end
+
 return t

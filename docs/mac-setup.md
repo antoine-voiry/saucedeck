@@ -75,6 +75,8 @@ when the `hs` CLI exists. The helper closes the port and stays away for 60 s. Wi
 quit Hammerspoon or run `saucedeck.release()` in its console before flashing. `saucedeck.status()`
 returns the link state.
 
+The helper pause after release is 60 s. An upload longer than that could see the helper reopen the port; if so, quit Hammerspoon.
+
 Tests (host, no Hammerspoon needed):
 
 ```sh

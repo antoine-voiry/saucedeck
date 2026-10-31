@@ -1,7 +1,7 @@
 -- Fake `hs` table for smoke-testing tools/mac/saucedeck_helper.lua on the host. Records calls.
 return function(opts)
   opts = opts or {}
-  local hs = { ports = opts.ports or {}, opened = {}, sent = {}, closed = 0, timers = {}, alerts = {}, tasks = {}, watchers = {} }
+  local hs = { ports = opts.ports or {}, opened = {}, sent = {}, closed = 0, timers = {}, alerts = {}, tasks = setmetatable({}, { __mode = "v" }), taskCount = 0 }  -- tasks weak: a GC'd task never calls back, like Hammerspoon
 
   local function device(vol, muted)
     local d = { vol = vol, muted = muted }
@@ -48,7 +48,8 @@ return function(opts)
     local t = { path = path, cb = cb, args = args }
     function t:start() return self end
     function t:terminate() return self end
-    hs.tasks[#hs.tasks + 1] = t
+    hs.taskCount = hs.taskCount + 1
+    hs.tasks[hs.taskCount] = t
     return t
   end }
   hs.http = { asyncGet = function() end }
@@ -59,13 +60,6 @@ return function(opts)
     vmStat = function() return {} end,
   }
   hs.battery = { percentage = function() return nil end, isCharging = function() return false end }
-  hs.usb = { watcher = { new = function()
-    local w = {}
-    function w:start() return self end
-    function w:stop() return self end
-    hs.watchers[#hs.watchers + 1] = w
-    return w
-  end } }
 
   package.preload["hs.ipc"] = function() return {} end
   return hs
