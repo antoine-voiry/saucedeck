@@ -1,5 +1,6 @@
 #include <unity.h>
 #include <string.h>
+#include <stdlib.h>
 #include "helper_proto.h"
 #include "host_link.h"
 #include "frame.h"
@@ -236,6 +237,107 @@ void test_frame_back_to_back_frames() {
   TEST_ASSERT_EQUAL_MEMORY(m2, out, kReportSize);
 }
 
+// --- TIME / CARD (status display, host -> deck) ---
+
+static size_t timeMsg(uint8_t *b, uint32_t epoch, int16_t tz, uint8_t len = 6) {
+  memset(b, 0, kReportSize);
+  b[0] = kProtoVersion; b[1] = MSG_TIME; b[2] = len;
+  for (int k = 0; k < 4; k++) b[3 + k] = static_cast<uint8_t>(epoch >> (8 * k));
+  b[7] = static_cast<uint8_t>(tz); b[8] = static_cast<uint8_t>(static_cast<uint16_t>(tz) >> 8);
+  return kReportSize;
+}
+
+static size_t cardMsg(uint8_t *b, uint8_t slot, uint8_t icon, uint16_t ttl, const char *text) {
+  size_t tl = strlen(text);
+  memset(b, 0, kReportSize);
+  b[0] = kProtoVersion; b[1] = MSG_CARD; b[2] = static_cast<uint8_t>(5 + tl);
+  b[3] = slot; b[4] = icon; b[5] = ttl & 0xFF; b[6] = ttl >> 8; b[7] = static_cast<uint8_t>(tl);
+  memcpy(b + 8, text, tl);
+  return kReportSize;
+}
+
+void test_decode_time() {
+  uint8_t b[kReportSize];
+  TimeMsg t;
+  TEST_ASSERT_TRUE(decodeTime(b, timeMsg(b, 0x6A2B3C4Du, -60), t));
+  TEST_ASSERT_EQUAL_HEX32(0x6A2B3C4Du, t.epoch);
+  TEST_ASSERT_EQUAL_INT16(-60, t.tzOffsetMin);
+  TEST_ASSERT_TRUE(decodeTime(b, timeMsg(b, 1, -720), t));
+  TEST_ASSERT_TRUE(decodeTime(b, timeMsg(b, 1, 840), t));
+}
+
+void test_decode_time_rejects() {
+  uint8_t b[kReportSize];
+  TimeMsg t;
+  TEST_ASSERT_FALSE(decodeTime(b, timeMsg(b, 1, 841), t));
+  TEST_ASSERT_FALSE(decodeTime(b, timeMsg(b, 1, -721), t));
+  TEST_ASSERT_FALSE(decodeTime(b, timeMsg(b, 1, 0, 5), t));  // wrong len
+  timeMsg(b, 1, 0); b[0] = 2;
+  TEST_ASSERT_FALSE(decodeTime(b, kReportSize, t));          // version
+  timeMsg(b, 1, 0); b[1] = MSG_CARD;
+  TEST_ASSERT_FALSE(decodeTime(b, kReportSize, t));          // other type
+  TEST_ASSERT_FALSE(decodeTime(b, 8, t));                    // truncated buffer
+}
+
+void test_decode_card() {
+  uint8_t b[kReportSize];
+  CardMsg c;
+  TEST_ASSERT_TRUE(decodeCard(b, cardMsg(b, 1, 1, 300, "Daft Punk - Around the World"), c));
+  TEST_ASSERT_EQUAL_UINT8(1, c.slot);
+  TEST_ASSERT_EQUAL_UINT8(1, c.icon);
+  TEST_ASSERT_EQUAL_UINT16(300, c.ttlS);
+  TEST_ASSERT_EQUAL_STRING("Daft Punk - Around the World", c.text);
+  TEST_ASSERT_TRUE(decodeCard(b, cardMsg(b, 7, 7, 0, ""), c));  // empty = clear slot
+  TEST_ASSERT_EQUAL_STRING("", c.text);
+  char max[kCardTextMax + 1];
+  memset(max, 'x', kCardTextMax);
+  max[kCardTextMax] = 0;
+  TEST_ASSERT_TRUE(decodeCard(b, cardMsg(b, 0, 0, 0, max), c));
+  TEST_ASSERT_EQUAL_size_t(kCardTextMax, strlen(c.text));
+}
+
+void test_decode_card_rejects() {
+  uint8_t b[kReportSize];
+  CardMsg c;
+  TEST_ASSERT_FALSE(decodeCard(b, cardMsg(b, 8, 1, 0, "x"), c));      // slot
+  TEST_ASSERT_FALSE(decodeCard(b, cardMsg(b, 1, 8, 0, "x"), c));      // icon
+  TEST_ASSERT_FALSE(decodeCard(b, cardMsg(b, 1, 1, 0, "a\x7F"), c));  // DEL
+  TEST_ASSERT_FALSE(decodeCard(b, cardMsg(b, 1, 1, 0, "a\x1F"), c));  // control
+  TEST_ASSERT_FALSE(decodeCard(b, cardMsg(b, 1, 1, 0, "Caf\xC3\xA9"), c));  // UTF-8
+  cardMsg(b, 1, 1, 0, "abc"); b[2] = 9;                               // len != 5 + tlen
+  TEST_ASSERT_FALSE(decodeCard(b, kReportSize, c));
+  char big[kCardTextMax + 2];
+  memset(big, 'x', kCardTextMax + 1);
+  big[kCardTextMax + 1] = 0;
+  TEST_ASSERT_FALSE(decodeCard(b, cardMsg(b, 1, 1, 0, big), c));      // tlen 49
+  cardMsg(b, 1, 1, 0, "x"); b[1] = MSG_TIME;
+  TEST_ASSERT_FALSE(decodeCard(b, kReportSize, c));
+  HostMsg h;
+  TEST_ASSERT_FALSE(decodeHost(b, kReportSize, h));                   // decodeHost ignores 0x04
+  cardMsg(b, 1, 1, 0, "x");
+  TEST_ASSERT_FALSE(decodeHost(b, kReportSize, h));                   // ... and 0x05
+}
+
+void test_decode_status_fuzz_never_accepts_out_of_range() {
+  srand(12345);
+  uint8_t b[kReportSize];
+  for (int it = 0; it < 20000; it++) {
+    for (size_t i = 0; i < kReportSize; i++) b[i] = static_cast<uint8_t>(rand());
+    b[0] = kProtoVersion;
+    b[1] = (it & 1) ? MSG_CARD : MSG_TIME;
+    if (it % 3 == 0) b[2] = static_cast<uint8_t>(5 + (b[7] % 50));  // make len plausible
+    CardMsg c;
+    if (decodeCard(b, kReportSize, c)) {
+      TEST_ASSERT_TRUE(c.slot < kCardSlots && c.icon < kCardIcons);
+      size_t n = strlen(c.text);
+      TEST_ASSERT_TRUE(n <= kCardTextMax);
+      for (size_t k = 0; k < n; k++) TEST_ASSERT_TRUE(c.text[k] >= 0x20 && c.text[k] <= 0x7E);
+    }
+    TimeMsg t;
+    if (decodeTime(b, kReportSize, t)) TEST_ASSERT_TRUE(t.tzOffsetMin >= -720 && t.tzOffsetMin <= 840);
+  }
+}
+
 int main(int, char **) {
   UNITY_BEGIN();
   RUN_TEST(test_decode_hello_volume_mic);
@@ -257,5 +359,10 @@ int main(int, char **) {
   RUN_TEST(test_frame_fake_sync_in_corrupt_frame_does_not_swallow_next);
   RUN_TEST(test_frame_random_bytes_emit_nothing);
   RUN_TEST(test_frame_back_to_back_frames);
+  RUN_TEST(test_decode_time);
+  RUN_TEST(test_decode_time_rejects);
+  RUN_TEST(test_decode_card);
+  RUN_TEST(test_decode_card_rejects);
+  RUN_TEST(test_decode_status_fuzz_never_accepts_out_of_range);
   return UNITY_END();
 }
