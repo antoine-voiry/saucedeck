@@ -49,3 +49,7 @@
 
 - Hammerspoon 1.1.1 embeds Lua 5.4.7 (LuaSkin.framework strings). Host tests use Homebrew lua@5.4 (keg-only, /opt/homebrew/opt/lua@5.4/bin/lua); `lua` on PATH is 5.5. [verified: strings + lua -v, 2026-10-31]
 - `hs` CLI is at /opt/homebrew/bin/hs but answers only when the Hammerspoon config loads `hs.ipc` ("can't access Hammerspoon message port" otherwise). [verified: hs -c, 2026-10-31]
+- `hs.serial` can open the TinyUSB CDC port (`usbmodem*`) at 115200 and deliver `received` callbacks. [unverified: check on bench]
+- `icalBuddy` output with `-b "" -iep datetime,title -po datetime,title -df "" -tf %H:%M eventsToday` is `HH:MM title` per line. [unverified: check on bench]
+- `lsappinfo info -only StatusLabel Mail|Telegram` prints `"StatusLabel"={ "label"="N" }`; empty/absent label when no badge. [unverified: check on bench]
+- `hs.host.vmStat()` field names used by `cards.ramPercent` (pages active/wired/compressed, pageSize, memSize) match the real table. [unverified: check on bench]

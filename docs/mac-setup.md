@@ -45,3 +45,41 @@ Edit actions in `tools/mac/hammerspoon.lua`, then Hammerspoon menu → Reload Co
 Bench-verified 2026-10-24: keys 1-9 and 11-12. Key 10: the deck sends Ctrl+Opt+Cmd+F13 (seen by a
 CGEventTap logger) and the Hammerspoon binding is registered; Messages not coming up was a Mac-side
 issue. Closed.
+
+## Status helper
+
+`tools/mac/saucedeck_helper.lua` talks to the deck over the USB serial port (115200) and feeds the
+LCD: volume, mic, clock and six status cards. Mic knob input comes back the same way.
+
+Add one line to `~/.hammerspoon/init.lua`, then Reload Config:
+
+```lua
+dofile(os.getenv("HOME") .. "/saucedeck/tools/mac/saucedeck_helper.lua")
+```
+
+Optional: `brew install ical-buddy` for the meeting card; macOS asks for Calendar access on first use.
+
+Card slots (a source that fails or has nothing to show clears its slot):
+
+| Slot | Shows | Refresh |
+|---|---|---|
+| 0 | Next meeting today (icalBuddy) | 60 s |
+| 1 | Now playing (Spotify, then Music) | 5 s |
+| 2 | CPU % and RAM % | 5 s |
+| 3 | Battery % and charging | 60 s |
+| 4 | Weather (wttr.in) | 15 min |
+| 5 | Unread badge counts for Mail and Telegram (lsappinfo) | 30 s |
+
+Uploading: `pio run -t upload` calls `tools/release_helper.py`, which runs `hs -c "saucedeck.release()"`
+when the `hs` CLI exists. The helper closes the port and stays away for 60 s. Without the `hs` CLI,
+quit Hammerspoon or run `saucedeck.release()` in its console before flashing. `saucedeck.status()`
+returns the link state.
+
+Tests (host, no Hammerspoon needed):
+
+```sh
+/opt/homebrew/opt/lua@5.4/bin/lua test/lua/run.lua
+~/.platformio/penv/bin/python -m unittest discover -s test/tools
+```
+
+Not bench-verified: needs the helper loaded in Hammerspoon and a deck on USB.

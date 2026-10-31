@@ -13,7 +13,7 @@ end
 function T.ok(v, msg) if not v then error(msg or "expected truthy", 2) end end
 function T.hex(s) return (s:gsub(".", function(c) return string.format("%02x", c:byte()) end)) end
 
-local suites = { "test_proto", "test_text", "test_cards", "test_core" }
+local suites = { "test_proto", "test_text", "test_cards", "test_core", "test_glue" }
 for _, name in ipairs(arg[1] and { arg[1] } or suites) do
   local suite = require(name)
   local names = {}
