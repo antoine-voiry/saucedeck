@@ -7,6 +7,7 @@
 #include <Fonts/FreeSansBold9pt7b.h>
 #include "frame.h"
 #include "keymap.h"
+#include "reset_log.h"
 #include "sim_deck.h"
 #include "sim_test.h"
 #include "status_board.h"
@@ -435,6 +436,56 @@ SIM_TEST(test_tile_band_has_square_bottom_corners) {
   TEST_ASSERT_EQUAL_HEX16(band, board().lcd.fb[tileY(1) + 4][tileX(1) + 73]);
 }
 
+// Reset log: src/reset_store.cpp keeps it under NVS "saucedeck"/"resets".
+static ResetLog storedResets() {
+  ResetLog log;
+  const std::vector<uint8_t> &b = board().nvs.ns["saucedeck"]["resets"];
+  log.load(b.data(), b.size());
+  return log;
+}
+
+SIM_TEST(test_panic_reset_shows_banner_then_clears_and_is_logged) {
+  board().resetReason = ESP_RST_PANIC;
+  SimDeck sim;
+  sim.boot();
+  sim.run(kAfterSplash);
+  TEST_ASSERT_TRUE(board().lcd.printed("Reset: panic"));
+  ResetLog log = storedResets();
+  TEST_ASSERT_EQUAL_UINT8(1, log.count());
+  TEST_ASSERT_EQUAL_UINT8(ESP_RST_PANIC, log.at(0).reason);
+  sim.run(25000);
+  board().lcd.texts.clear();
+  sim.run(5000);  // banner lasts 30 s
+  TEST_ASSERT_FALSE(board().lcd.printed("Reset:"));
+}
+
+SIM_TEST(test_power_on_logs_without_banner) {
+  SimDeck sim;
+  sim.boot();
+  sim.run(kAfterSplash);
+  TEST_ASSERT_FALSE(board().lcd.printed("Reset:"));
+  ResetLog log = storedResets();
+  TEST_ASSERT_EQUAL_UINT8(1, log.count());
+  TEST_ASSERT_EQUAL_UINT8(ESP_RST_POWERON, log.at(0).reason);
+}
+
+SIM_TEST(test_reset_log_appends_to_stored_entries) {
+  ResetLog old;
+  old.push({ESP_RST_POWERON, 0});
+  uint8_t blob[ResetLog::kBytes];
+  size_t n = old.serialize(blob, sizeof blob);
+  board().nvs.ns["saucedeck"]["resets"].assign(blob, blob + n);
+  board().resetReason = ESP_RST_BROWNOUT;
+  SimDeck sim;
+  sim.boot();
+  sim.run(kAfterSplash);
+  TEST_ASSERT_TRUE(board().lcd.printed("Reset: brownout"));
+  ResetLog log = storedResets();
+  TEST_ASSERT_EQUAL_UINT8(2, log.count());
+  TEST_ASSERT_EQUAL_UINT8(ESP_RST_BROWNOUT, log.at(0).reason);
+  TEST_ASSERT_EQUAL_UINT8(ESP_RST_POWERON, log.at(1).reason);
+}
+
 int main(int, char **) {
   UNITY_BEGIN();
   RUN_TEST(test_boot_shows_default_legends_f13_to_f24);
@@ -447,6 +498,9 @@ int main(int, char **) {
   RUN_TEST(test_cards_rotate_with_index);
   RUN_TEST(test_helper_silence_clears_cards);
   RUN_TEST(test_banner_takes_line2_then_card_returns);
+  RUN_TEST(test_panic_reset_shows_banner_then_clears_and_is_logged);
+  RUN_TEST(test_power_on_logs_without_banner);
+  RUN_TEST(test_reset_log_appends_to_stored_entries);
   RUN_TEST(test_bad_card_frame_is_ignored);
   RUN_TEST(test_idle_tiles_use_key_hues);
   RUN_TEST(test_seven_cards_seven_dots_text_clear_of_dots);

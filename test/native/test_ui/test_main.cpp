@@ -139,7 +139,7 @@ void test_model_strip_gen_marks_line2_when_no_banner() {
 void test_model_strip_gen_ignored_while_banner_shown() {
   ScreenModel m;
   ScreenState s = base();
-  s.banner = BANNER_BROWNOUT;
+  s.banner = BANNER_RESET;
   m.update(s, 0);
   s.stripGen = 1;
   TEST_ASSERT_EQUAL_HEX16(DIRTY_NONE, m.update(s, 0));

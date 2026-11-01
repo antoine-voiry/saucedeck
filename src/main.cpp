@@ -14,6 +14,7 @@
 #include "helper_link.h"
 #include "keymap_store.h"
 #include "wifi_portal.h"
+#include "reset_store.h"
 #include <esp_system.h>
 
 USBHIDKeyboard Keyboard;
@@ -37,7 +38,7 @@ static_assert(sizeof(kConsumerCodes) / sizeof(kConsumerCodes[0]) ==
 static Deck deck(16);  // macOS: 16 VOL+/- steps full range (unverified)
 static bool mcpOk = false;
 static bool keymapResetNotice = false;  // blob present but corrupt -> defaults (banner)
-static bool brownoutNotice = false;     // last reset was a brownout (banner)
+static bool resetNotice = false;        // last reset was not a power-on (banner)
 static uint32_t helperMissingUntil = 0;
 static WifiSession wifi;
 static uint8_t wifiInfoTick = 0;  // forces a banner redraw when the info text changes
@@ -132,7 +133,15 @@ void setup() {
   bool loaded = keymapLoad(stored);
   if (loaded) deck.setKeyMap(stored);
   keymapResetNotice = hadMap && !loaded;
-  brownoutNotice = esp_reset_reason() == ESP_RST_BROWNOUT;
+  ResetLog resets;
+  ResetEntry boot = resetRecordBoot(resets);
+  resetNotice = resetNotable(boot.reason);
+  char text[40];
+  formatReset(boot, text, sizeof text);
+  displaySetResetText(text);
+  char summary[200];
+  resets.summary(summary, sizeof summary);
+  portalSetResets(summary);
 
   displayBegin();
   ledsBegin();
@@ -144,6 +153,11 @@ void setup() {
 
 void loop() {
   uint32_t now = millis();
+  static uint32_t lastUptime = 0;
+  if (now - lastUptime >= 1000) {  // uptime survives a crash in RTC memory: next boot's banner
+    lastUptime = now;
+    resetUptimeTick(now);
+  }
   helperPoll(now);
   const HostLink &hl = helperLink();
   deck.setHelperPresent(hl.present(now));
@@ -231,8 +245,8 @@ void loop() {
     arg = wifiInfoTick;
   } else if (keymapResetNotice && now < 5000) {
     banner = BANNER_KEYMAP_RESET;
-  } else if (brownoutNotice && now < 8000) {
-    banner = BANNER_BROWNOUT;
+  } else if (resetNotice && now < 30000) {
+    banner = BANNER_RESET;
   }
   displayUpdate({pct, spkMuted, micMuted, micKnown, micPct, banner, arg, keymapGen, hl.present(now), wifi.on(),
                  helperClock().minuteOfDay(now), status.topGen(), status.stripGen()},

@@ -45,10 +45,20 @@ static const char kPresetHtml[] =
     "}).catch(function(err){s.textContent='Bad preset: '+err.message;});};</script>";
 static WiFiManagerParameter presetParam(kPresetHtml);  // custom HTML: no id, no value
 
+static char resetsHtml[280] = "";  // filled by portalSetResets() at boot
+static WiFiManagerParameter resetsParam(resetsHtml);
+
+void portalSetResets(const char *summary) {
+  snprintf(resetsHtml, sizeof resetsHtml, "<p><small>Last resets (newest first): %s</small></p>", summary);
+}
+
 static void onSave() { savedPending = true; }
 
 static void buildParams(const KeyMap &m) {
-  if (!paramsAdded) wm.addParameter(&presetParam);
+  if (!paramsAdded) {
+    wm.addParameter(&resetsParam);
+    wm.addParameter(&presetParam);
+  }
   for (uint8_t i = 0; i < kKeyCount; i++) {
     WiFiManagerParameter **p = &params[kFields * i];
     snprintf(typeBuf[i], sizeof typeBuf[i], "%s", keyTypeName(m.entry(i).type));

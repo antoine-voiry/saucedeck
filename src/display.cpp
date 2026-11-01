@@ -208,6 +208,8 @@ void displayBegin() {
 
 static char apPassword[9] = "";
 static char wifiInfo[28] = "";
+static char resetText[40] = "";
+void displaySetResetText(const char *t) { snprintf(resetText, sizeof resetText, "%s", t); }
 void displaySetWifiInfo(const char *info) { snprintf(wifiInfo, sizeof wifiInfo, "%s", info); }
 void displaySetApPassword(const char *p) { snprintf(apPassword, sizeof apPassword, "%s", p); }
 
@@ -226,7 +228,7 @@ static void drawBanner(uint8_t b, uint8_t arg) {
     case BANNER_KEYMAP_RESET: snprintf(text, sizeof text, "Key map reset"); break;
     case BANNER_WIFI_FAILED: snprintf(text, sizeof text, "Wi-Fi failed"); break;
     case BANNER_INVALID_KEY: snprintf(text, sizeof text, "Invalid key %u", arg); break;
-    case BANNER_BROWNOUT: snprintf(text, sizeof text, "Reset: brownout"); break;
+    case BANNER_RESET: snprintf(text, sizeof text, "%s", resetText); break;
     default: text[0] = 0; break;
   }
   printAt(FreeSansBold9pt7b, text, 8, kLine2Base, b == BANNER_APPLY ? kApplyYellow : kWhite);

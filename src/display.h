@@ -14,3 +14,4 @@ void displayUpdate(const ScreenState &state, const KeyMap &keys, TileAnim &anim,
 void displaySetDim(uint8_t level);  // 255 full .. 0 backlight off + panel sleep
 void displaySetApPassword(const char *p);  // shown in the SAUCEDECK-setup banner
 void displaySetWifiInfo(const char *info);  // shown with the Wi-Fi joined / starting banners
+void displaySetResetText(const char *t);     // shown with BANNER_RESET
