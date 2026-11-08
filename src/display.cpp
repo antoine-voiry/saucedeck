@@ -8,6 +8,7 @@
 #include <Fonts/FreeSansBold9pt7b.h>
 #include "driver/gpio.h"
 #include "deck_clock.h"
+#include "icons.h"
 #include "legend.h"
 #include "pins.h"
 #include "theme.h"
@@ -26,6 +27,9 @@ static constexpr int16_t kTopH = 22;
 static constexpr int16_t kTileX0 = 3, kTileY0 = 24, kTilePitchX = 80, kTilePitchY = 54;
 static constexpr int16_t kTileW = 74, kTileH = 50, kTileR = 8, kBandH = 5, kBandR = 3;
 static constexpr uint16_t kLabelW = 68;
+// Icon tile (spec 2026-11-08 key icons, section 6): 24x24 icon box, one-line label below.
+static constexpr int16_t kIconBoxDX = 25, kIconBoxDY = 8, kIconLabelBase = 45;
+static constexpr uint8_t kIconRunsMax = 12;  // 24 px row -> at most 12 runs
 static constexpr int16_t kStripY = 188;
 static constexpr int16_t kSegX = 8, kSegPitch = 8, kSegY = 194, kSegW = 6, kSegH = 15, kSegR = 2;
 static constexpr int16_t kPctX = 172, kPctBase = 208, kPctBoxY = 190, kPctBoxW = 51, kPctBoxH = 22;
@@ -102,6 +106,21 @@ static void drawTile(uint8_t i, const KeyEntry &e, uint8_t level, bool failed) {
 
   char text[kLegendLineMax + 1];
   displayLabel(e, text, sizeof text);
+  if (e.icon != 0) {
+    IconRun runs[kIconRunsMax];
+    for (uint8_t row = 0; row < kIconSize; row++) {
+      const uint8_t n = iconRuns(e.icon, row, runs, kIconRunsMax);
+      for (uint8_t k = 0; k < n; k++)
+        tft.drawFastHLine(x + kIconBoxDX + runs[k].x, y + kIconBoxDY + row, runs[k].len, look.text);
+    }
+    char line[kLegendLineMax + 4];
+    LegendFont font;
+    chooseOneLine(text, kLabelW, advBold, advRegular, font, line, sizeof line);
+    const bool bold = font == LegendFont::Bold;
+    printCentered(bold ? FreeSansBold9pt7b : FreeSans9pt7b, bold ? advBold : advRegular, line, x, kTileW,
+                  y + kIconLabelBase, look.text);
+    return;
+  }
   Legend lg;
   chooseLegend(text, kLabelW, advBold, advRegular, lg);
   const bool bold = lg.font == LegendFont::Bold;

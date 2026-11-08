@@ -49,7 +49,36 @@ static void clearRecords() {
   board().lcd.rects.clear();
   board().lcd.rounds.clear();
   board().lcd.circles.clear();
+  board().lcd.hlines.clear();
 }
+
+static int16_t widthIn(const GFXfont &f, const char *s) {
+  int16_t w = 0;
+  for (const char *p = s; *p; p++) w += f.glyph[*p - f.first].xAdvance;
+  return w;
+}
+
+static void storeKeyMap(const KeyMap &m) {
+  uint8_t blob[kKeyMapBlobMax];
+  size_t n = serializeKeyMap(m, blob, sizeof blob);
+  board().nvs.ns["saucedeck"]["keymap"].assign(blob, blob + n);  // src/keymap_store.cpp names
+}
+
+// Icon box of tile pos (spec 2026-11-08 key icons, section 6): (x+25, y+8), 24x24.
+static bool insideIconBox(const SimLcdRect &h, uint8_t pos) {
+  const int16_t bx = tileX(pos) + 25, by = tileY(pos) + 8;
+  return h.h == 1 && h.w > 0 && h.x >= bx && h.x + h.w <= bx + 24 && h.y >= by && h.y < by + 24;
+}
+
+static std::vector<SimLcdRect> hlinesIn(uint8_t pos) {
+  std::vector<SimLcdRect> out;
+  for (const SimLcdRect &h : board().lcd.hlines)
+    if (h.x >= tileX(pos) && h.x < tileX(pos) + 74 && h.y >= tileY(pos) && h.y < tileY(pos) + 50) out.push_back(h);
+  return out;
+}
+
+static uint8_t advR(char c) { return FreeSans9pt7b.glyph[c - FreeSans9pt7b.first].xAdvance; }
+static uint8_t advB(char c) { return FreeSansBold9pt7b.glyph[c - FreeSansBold9pt7b.first].xAdvance; }
 
 SIM_TEST(test_boot_shows_default_legends_f13_to_f24) {
   SimDeck sim;
@@ -63,9 +92,13 @@ SIM_TEST(test_boot_shows_default_legends_f13_to_f24) {
   TEST_ASSERT_TRUE(board().lcd.printedExact("MIC LIVE"));
 }
 
-SIM_TEST(test_preset_labels_become_legends) {
+// Text tiles (icon 0): the Plan 4 two-line legend path is unchanged.
+SIM_TEST(test_labels_without_icons_become_legends) {
+  KeyMap m;
+  const char *labels[] = {"Chrome", "YouTube", "Weather", "Hide app"};
+  for (uint8_t i = 0; i < 4; i++) TEST_ASSERT_EQUAL(KeyMapError::None, m.setLabel(i, labels[i]));
+  storeKeyMap(m);
   SimDeck sim;
-  TEST_ASSERT_TRUE(sim.loadPresetIntoNvs(SIM_PROJECT_DIR "/presets/mac-daily.json"));
   sim.boot();
   sim.run(kAfterSplash);
   TEST_ASSERT_TRUE(board().lcd.printed("Chrome"));
@@ -76,6 +109,79 @@ SIM_TEST(test_preset_labels_become_legends) {
   TEST_ASSERT_TRUE(board().lcd.printedExact("Hide"));     // "Hide app": split at the space
   TEST_ASSERT_TRUE(board().lcd.printedExact("app"));
   TEST_ASSERT_FALSE(board().lcd.printed("F14"));
+}
+
+SIM_TEST(test_icon_tile_draws_icon_runs_in_box_and_one_line_label) {
+  SimDeck sim;
+  TEST_ASSERT_TRUE(sim.loadPresetIntoNvs(SIM_PROJECT_DIR "/presets/mac-daily.json"));
+  sim.boot();
+  sim.run(kAfterSplash);
+  std::vector<SimLcdRect> runs = hlinesIn(1);
+  TEST_ASSERT_GREATER_THAN(20, runs.size());
+  for (const SimLcdRect &h : runs) {
+    TEST_ASSERT_TRUE(insideIconBox(h, 1));
+    TEST_ASSERT_EQUAL_HEX16(0xFFFF, h.c);  // idle: white ink
+  }
+  // Label: one line at baseline y+45, chosen by chooseOneLine with the real font advances.
+  char want[kLegendLineMax + 4];
+  LegendFont f;
+  chooseOneLine("Screenshot", 68, advB, advR, f, want, sizeof want);
+  const SimLcdText *label = nullptr;
+  for (const SimLcdText &t : board().lcd.texts)
+    if (t.y == tileY(1) + 45 && t.x >= tileX(1) && t.x < tileX(1) + 74) label = &t;
+  TEST_ASSERT_NOT_NULL(label);
+  TEST_ASSERT_EQUAL_STRING(want, label->s.c_str());
+  const int16_t w = widthIn(f == LegendFont::Bold ? FreeSansBold9pt7b : FreeSans9pt7b, want);
+  TEST_ASSERT_TRUE(w <= 68);
+  TEST_ASSERT_EQUAL(tileX(1) + (74 - w) / 2, label->x);
+  // Nothing else printed on tile 1 (no two-line legend).
+  for (const SimLcdText &t : board().lcd.texts)
+    if (t.x >= tileX(1) && t.x < tileX(1) + 74 && t.y > tileY(1) && t.y < tileY(1) + 50)
+      TEST_ASSERT_EQUAL(tileY(1) + 45, t.y);
+  // Short label fits bold whole: "Gmail" (key 3).
+  TEST_ASSERT_TRUE(board().lcd.printedExact("Gmail"));
+  // Ink pixels land in the framebuffer inside the icon box.
+  int ink = 0;
+  for (int y = tileY(1) + 8; y < tileY(1) + 32; y++)
+    for (int x = tileX(1) + 25; x < tileX(1) + 49; x++)
+      if (board().lcd.fb[y][x] == 0xFFFF) ink++;
+  TEST_ASSERT_GREATER_THAN(20, ink);
+}
+
+SIM_TEST(test_pressed_icon_tile_draws_black_ink) {
+  SimDeck sim;
+  TEST_ASSERT_TRUE(sim.loadPresetIntoNvs(SIM_PROJECT_DIR "/presets/mac-daily.json"));
+  sim.boot();
+  sim.run(kAfterSplash);
+  clearRecords();
+  sim.press(8);
+  sim.run(kSettle + 40);
+  std::vector<SimLcdRect> runs = hlinesIn(8);
+  TEST_ASSERT_FALSE(runs.empty());
+  for (const SimLcdRect &h : runs) {
+    TEST_ASSERT_TRUE(insideIconBox(h, 8));
+    TEST_ASSERT_EQUAL_HEX16(0x0000, h.c);
+  }
+  for (const SimLcdRect &h : board().lcd.hlines) TEST_ASSERT_TRUE(insideIconBox(h, 8));  // only its tile
+  TEST_ASSERT_EQUAL_HEX16(tileLook(7, TileAnim::kFull, false).fill, bodies(8).back().c);
+}
+
+SIM_TEST(test_icon_zero_key_keeps_text_legend_among_icon_tiles) {
+  SimDeck sim;
+  TEST_ASSERT_TRUE(sim.loadPresetIntoNvs(SIM_PROJECT_DIR "/presets/mac-daily.json"));
+  // Key 3 without icon, two-word label: Plan 4 two-line legend.
+  KeyMap m;
+  size_t n = board().nvs.ns["saucedeck"]["keymap"].size();
+  TEST_ASSERT_TRUE(deserializeKeyMap(board().nvs.ns["saucedeck"]["keymap"].data(), n, m));
+  TEST_ASSERT_EQUAL(KeyMapError::None, m.setIcon(2, ""));
+  TEST_ASSERT_EQUAL(KeyMapError::None, m.setLabel(2, "Gmail in Chrome"));
+  storeKeyMap(m);
+  sim.boot();
+  sim.run(kAfterSplash);
+  TEST_ASSERT_TRUE(hlinesIn(3).empty());
+  TEST_ASSERT_FALSE(hlinesIn(2).empty());
+  TEST_ASSERT_TRUE(board().lcd.printedExact("Gmail in"));
+  TEST_ASSERT_TRUE(board().lcd.printedExact("Chrome"));
 }
 
 SIM_TEST(test_key_press_repaints_only_its_tile) {
@@ -401,11 +507,6 @@ static const SimLcdText *textNamed(const char *s) {
   return nullptr;
 }
 
-static int16_t widthIn(const GFXfont &f, const char *s) {
-  int16_t w = 0;
-  for (const char *p = s; *p; p++) w += f.glyph[*p - f.first].xAdvance;
-  return w;
-}
 
 SIM_TEST(test_mic_100_falls_back_to_regular_font_and_fits_pill) {
   SimDeck sim;
@@ -489,7 +590,10 @@ SIM_TEST(test_reset_log_appends_to_stored_entries) {
 int main(int, char **) {
   UNITY_BEGIN();
   RUN_TEST(test_boot_shows_default_legends_f13_to_f24);
-  RUN_TEST(test_preset_labels_become_legends);
+  RUN_TEST(test_labels_without_icons_become_legends);
+  RUN_TEST(test_icon_tile_draws_icon_runs_in_box_and_one_line_label);
+  RUN_TEST(test_pressed_icon_tile_draws_black_ink);
+  RUN_TEST(test_icon_zero_key_keeps_text_legend_among_icon_tiles);
   RUN_TEST(test_key_press_repaints_only_its_tile);
   RUN_TEST(test_release_fades_back_to_idle_in_four_repaints);
   RUN_TEST(test_app_key_without_helper_flashes_orange);

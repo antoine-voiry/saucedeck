@@ -85,6 +85,33 @@ SIM_TEST(test_line_triangle_rect_outline) {
   TEST_ASSERT_EQUAL_HEX16(kBlack, px(59, 59));
 }
 
+SIM_TEST(test_fast_hline_sets_pixels_records_and_clips) {
+  tft().fillScreen(kBlack);
+  board().lcd.hlines.clear();
+  tft().drawFastHLine(10, 20, 4, kRed);
+  TEST_ASSERT_EQUAL_HEX16(kBlack, px(9, 20));
+  TEST_ASSERT_EQUAL_HEX16(kRed, px(10, 20));
+  TEST_ASSERT_EQUAL_HEX16(kRed, px(13, 20));
+  TEST_ASSERT_EQUAL_HEX16(kBlack, px(14, 20));
+  TEST_ASSERT_EQUAL_HEX16(kBlack, px(10, 21));
+  TEST_ASSERT_EQUAL(1u, board().lcd.hlines.size());
+  const SimLcdRect &h = board().lcd.hlines[0];
+  TEST_ASSERT_EQUAL(10, h.x);
+  TEST_ASSERT_EQUAL(20, h.y);
+  TEST_ASSERT_EQUAL(4, h.w);
+  TEST_ASSERT_EQUAL(1, h.h);
+  TEST_ASSERT_EQUAL_HEX16(kRed, h.c);
+  tft().drawFastHLine(-3, 0, 5, kWhite);  // clipped to x 0..1
+  TEST_ASSERT_EQUAL_HEX16(kWhite, px(0, 0));
+  TEST_ASSERT_EQUAL_HEX16(kWhite, px(1, 0));
+  TEST_ASSERT_EQUAL_HEX16(kBlack, px(2, 0));
+  tft().drawFastHLine(317, 239, 10, kWhite);  // clipped at the right edge, no overrun
+  TEST_ASSERT_EQUAL_HEX16(kWhite, px(319, 239));
+  tft().drawFastHLine(5, 240, 10, kWhite);  // off panel: nothing drawn, no crash
+  tft().drawFastHLine(5, -1, 10, kWhite);
+  TEST_ASSERT_EQUAL(5u, board().lcd.hlines.size());
+}
+
 SIM_TEST(test_circle_helper_draws_quarter_arc) {
   tft().fillScreen(kBlack);
   tft().drawCircleHelper(100, 100, 10, 4, kRed);  // bottom-right quarter
@@ -249,6 +276,7 @@ int main(int, char **) {
   RUN_TEST(test_round_rect_corner_stays_background);
   RUN_TEST(test_fill_circle_centre_and_edge);
   RUN_TEST(test_line_triangle_rect_outline);
+  RUN_TEST(test_fast_hline_sets_pixels_records_and_clips);
   RUN_TEST(test_circle_helper_draws_quarter_arc);
   RUN_TEST(test_custom_font_print_sets_glyph_pixels_and_advances);
   RUN_TEST(test_classic_font_size2_h_is_10x14);

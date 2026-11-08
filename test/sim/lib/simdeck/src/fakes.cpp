@@ -586,6 +586,10 @@ void Adafruit_ST7789::fillTriangle(int16_t x0, int16_t y0, int16_t x1, int16_t y
                                    uint16_t c) {
   triangleFill(x0, y0, x1, y1, x2, y2, c);
 }
+void Adafruit_ST7789::drawFastHLine(int16_t x, int16_t y, int16_t w, uint16_t c) {
+  board().lcd.hlines.push_back({x, y, w, 1, c});
+  hLine(x, y, w, c);
+}
 void Adafruit_ST7789::drawLine(int16_t x0, int16_t y0, int16_t x1, int16_t y1, uint16_t c) {
   lineDraw(x0, y0, x1, y1, c);
 }

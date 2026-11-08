@@ -32,6 +32,7 @@ struct SimLcd {
   std::vector<SimLcdText> texts;
   std::vector<SimLcdRect> rects;    // every fillRect, in order
   std::vector<SimLcdRect> rounds;   // every fillRoundRect (bounding box), in order
+  std::vector<SimLcdRect> hlines;   // every drawFastHLine: x, y, w, h = 1 (icon runs)
   std::vector<SimLcdRect> circles;  // every fillCircle: x, y = centre, w = h = radius
   static constexpr int kW = 320, kH = 240;
   uint16_t fb[kH][kW] = {};

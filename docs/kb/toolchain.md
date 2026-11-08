@@ -59,3 +59,4 @@
 - `[env:bringup]` overrides `USB_PRODUCT` to `SAUCEDECK-BRINGUP` (saucedeck env stays `SAUCEDECK`) so the Mac helper skips it. [unverified: not bench-verified, check `system_profiler SPUSBDataType`]
 - `hs.serial.availablePortNames()` returns names like `usbmodem…` (no `/dev/cu.` prefix); `core:pickPort` and the port-loss check rely on it. [unverified: check on bench]
 - Firmware size after Plan 4 Candy LCD theme (`pio run -e saucedeck`, 2026-10-31): RAM 77 264 B (23.6 % of 327 680), Flash 1 224 391 B (38.9 % of 3 145 728 app partition). Bringup: RAM 45 088 B, Flash 427 327 B (13.6 %). [verified: build output 2026-10-31]
+- Firmware size after Plan 5 key icons (`pio run -e saucedeck`, 2026-11-08): RAM 78 152 B (23.9 % of 327 680), Flash 1 233 499 B (39.2 % of 3 145 728 app partition), +9 108 B flash vs Plan 4 build (icons + blob v3 + portal field). Bringup unchanged: RAM 45 088 B, Flash 427 327 B (13.6 %). [verified: build output 2026-11-08]

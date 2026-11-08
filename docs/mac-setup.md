@@ -26,20 +26,23 @@ Tried 2026-10-24 on macOS 26.7.1, bench-verified:
 
 ## Key map
 
-| Deck key | Sends | Action |
-|---|---|---|
-| 1 | F13 | Screenshot toolbar |
-| 2 | F14 | Google Chrome |
-| 3 | F15 | Gmail in Chrome |
-| 4 | F16 | Telegram |
-| 5 | F17 | Autodesk Fusion |
-| 6 | F18 | System Settings |
-| 7 | F19 | Tips (help) |
-| 8 | F20 | YouTube in Chrome |
-| 9 | Cmd+H | Hide front app (macOS itself, no Hammerspoon) |
-| 10 | Ctrl+Opt+Cmd+F13 | Messages |
-| 11 | Ctrl+Opt+Cmd+F14 | Weather |
-| 12 | Ctrl+Opt+Cmd+F15 | Bambu Studio |
+| Deck key | Sends | Action | LCD label | Icon |
+|---|---|---|---|---|
+| 1 | F13 | Screenshot toolbar | Screenshot | `camera` |
+| 2 | F14 | Google Chrome | Chrome | `globe` |
+| 3 | F15 | Gmail in Chrome | Gmail | `envelope` |
+| 4 | F16 | Telegram | Telegram | `plane` |
+| 5 | F17 | Autodesk Fusion | Fusion 360 | `cube` |
+| 6 | F18 | System Settings | Settings | `gear` |
+| 7 | F19 | Tips (help) | Help | `question` |
+| 8 | F20 | YouTube in Chrome | YouTube | `play` |
+| 9 | Cmd+H | Hide front app (macOS itself, no Hammerspoon) | Hide app | `eye-off` |
+| 10 | Ctrl+Opt+Cmd+F13 | Messages | iMessage | `chat` |
+| 11 | Ctrl+Opt+Cmd+F14 | Weather | Weather | `weather` |
+| 12 | Ctrl+Opt+Cmd+F15 | Bambu Studio | Bambu | `printer` |
+
+Each tile shows a 24x24 icon above a one-line label (Plan 5, [spec](superpowers/specs/2026-11-08-key-icons-design.md)).
+The portal has an icon field per key (`Key n icon`, empty = text-only tile); the preset sets them.
 
 Edit actions in `tools/mac/hammerspoon.lua`, then Hammerspoon menu → Reload Config.
 Bench-verified 2026-10-24: keys 1-9 and 11-12. Key 10: the deck sends Ctrl+Opt+Cmd+F13 (seen by a
