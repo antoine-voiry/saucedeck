@@ -60,7 +60,7 @@ Tile geometry is unchanged from Plan 4: x = c*80+3, y = 24+r*54, 74×50, radius 
 
 - Icon tile (entry.icon ≠ 0):
   - Icon box at (x+25, y+8), 24×24. Each run is drawn with `drawFastHLine(x+25+run.x, y+8+row, run.len, look.text)`. Colour = `tileLook().text`: white idle, black from half fade on.
-  - Label: one line, baseline y+44, centred in 74 px, max 72 px. Pure helper `chooseOneLine` (next to `chooseLegend` in theme.h) draws `FreeSans7pt7b` (regular only), cut with `fitLine` "..." if wider than 72 px. Bold 7pt dropped (revision 2): FreeType mono rendering at 7 pt / DPI 141 loses the dot of bold 'i'/'j' ("Gmall"), and mixed weights looked uneven. Label text = `displayLabel()` (empty label → derived from value, as today).
+  - Label: one line, baseline y+44, centred in 74 px, max 72 px. Drawn in `FreeSans7pt7b` (regular only), cut with `fitLine` "..." if wider than 72 px. Bold 7pt dropped (revision 2): FreeType mono rendering at 7 pt / DPI 141 loses the dot of bold 'i'/'j' ("Gmall"), and mixed weights looked uneven. Label text = `displayLabel()` (empty label → derived from value, as today).
   - The 7pt fonts are generated (Adafruit fontconvert, DPI 141, GNU FreeFont 20120503 `FreeSans.ttf` / `FreeSansBold.ttf`; glyph metrics of the 9pt regeneration match the shipped Adafruit header) and committed under `include/fonts/`, with `tools/make_label_fonts.sh` to rebuild them. Cap height 9 px; widest preset label "Screenshot" = 69 px regular. Revision 2026-11-08: the first version (9pt, 68 px, y+45) cut 6 of 12 preset labels, see the Task 3 report.
 - Text tile (icon 0): today's `chooseLegend` path, unchanged.
 - Repaint scope unchanged: a press repaints only its tile.
@@ -74,7 +74,7 @@ Tile geometry is unchanged from Plan 4: x = c*80+3, y = 24+r*54, 74×50, radius 
   - `iconName` round-trips;
   - `iconRuns` on a hand-checked row, an empty row, and the id/row bounds.
 - `test_keymap`: `setIcon` cases; v3 round-trip with icons; v2 blob loads with icon 0; blob with icon id 21 rejected; `==` sees icon changes.
-- `test_theme`: `chooseOneLine` bold / regular / cut branches with the fake glyph widths.
+- Label cut: covered by the existing `fitLine` tests in `test_legend`; sim checks all 12 preset labels print whole in FreeSans7pt7b.
 - Sim (`test_sim_display`):
   - icon tile: every recorded hline lies inside its 24×24 box, and the label is printed at baseline y+45;
   - pressed icon key draws hlines in black;
