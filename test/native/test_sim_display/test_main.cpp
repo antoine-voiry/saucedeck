@@ -7,11 +7,14 @@
 #include <Fonts/FreeSansBold9pt7b.h>
 #include "fonts/FreeSans7pt7b.h"
 #include "frame.h"
+#include "icons.h"
 #include "keymap.h"
+#include "knob_chord.h"
 #include "reset_log.h"
 #include "sim_deck.h"
 #include "sim_test.h"
 #include "status_board.h"
+#include <WiFiManager.h>
 #include "theme.h"
 
 void setUp() {}
@@ -150,7 +153,7 @@ SIM_TEST(test_icon_tile_draws_icon_runs_in_box_and_one_line_label) {
   for (const SimLcdText &t : board().lcd.texts)
     if (t.x >= tileX(1) && t.x < tileX(1) + 74 && t.y > tileY(1) && t.y < tileY(1) + 50)
       TEST_ASSERT_EQUAL(tileY(1) + 44, t.y);
-  // Short label fits bold whole: "Gmail" (key 3).
+  // Short label fits whole in regular 7pt: "Gmail" (key 3).
   TEST_ASSERT_TRUE(board().lcd.printedExact("Gmail"));
   // Ink pixels land in the framebuffer inside the icon box.
   int ink = 0;
@@ -616,8 +619,83 @@ SIM_TEST(test_reset_log_appends_to_stored_entries) {
   TEST_ASSERT_EQUAL_UINT8(ESP_RST_POWERON, log.at(1).reason);
 }
 
+// Upgrade path: v2 blob (no icons) in NVS -> portal Save with icons -> knob 1 -> v3 blob.
+static uint32_t stagedIconCrc(uint8_t *buf, size_t n) { return crc32(buf, n); }
+
+SIM_TEST(test_portal_save_with_icons_upgrades_v2_blob_to_v3) {
+  // Hand-built v2: magic, 2, 12 x [type, vlen, value, llen, label], CRC.
+  uint8_t buf[kKeyMapBlobMax];
+  const uint8_t head[] = {'S', 'D', 'K', 'M', 2};
+  memcpy(buf, head, sizeof head);
+  size_t p = sizeof head;
+  for (uint8_t i = 0; i < kKeyCount; i++) {
+    char v[8];
+    size_t n = static_cast<size_t>(snprintf(v, sizeof v, "f%u", 13u + i));
+    buf[p++] = 0;
+    buf[p++] = static_cast<uint8_t>(n);
+    memcpy(buf + p, v, n);
+    p += n;
+    buf[p++] = 2;
+    buf[p++] = 'o';
+    buf[p++] = 'k';
+  }
+  const uint32_t c = stagedIconCrc(buf, p);
+  for (int k = 0; k < 4; k++) buf[p++] = static_cast<uint8_t>(c >> (8 * k));
+  board().nvs.ns["saucedeck"]["keymap"].assign(buf, buf + p);
+
+  SimDeck sim;
+  sim.boot();
+  sim.run(kAfterSplash);
+  TEST_ASSERT_TRUE(board().lcd.printed("ok"));  // text tiles
+  for (uint8_t pos = 1; pos <= 12; pos++) TEST_ASSERT_TRUE(hlinesIn(pos).empty());
+
+  // Knob chord held 5 s starts the portal (joinOk false -> AP portal up).
+  sim.knobPress(1);
+  sim.knobPress(2);
+  sim.run(KnobChord::kWifiHoldMs + 200);
+  sim.knobRelease(1);
+  sim.knobRelease(2);
+  sim.run(kSettle);
+  WiFiManager *wm = board().wifi.manager;
+  TEST_ASSERT_NOT_NULL(wm);
+  TEST_ASSERT_TRUE(board().wifi.portalActive);
+
+  // Browser form: t/v/l kept, i1..i12 set; then Save.
+  static const char *const kIcons[12] = {"camera", "globe", "envelope", "plane", "cube", "gear",
+                                         "question", "play", "eye-off", "chat", "weather", "home"};
+  size_t set = 0;
+  for (WiFiManagerParameter *prm : wm->params) {
+    if (!prm->getID()) continue;
+    const char *id = prm->getID();
+    if (id[0] != 'i') continue;
+    const int n = atoi(id + 1);
+    TEST_ASSERT_TRUE(n >= 1 && n <= 12);
+    prm->setValue(kIcons[n - 1], 10);
+    set++;
+  }
+  TEST_ASSERT_EQUAL(12, set);
+  wm->saveCb_();
+  sim.run(kSettle);
+  sim.knobPress(1);  // confirm
+  sim.run(kSettle);
+  sim.knobRelease(1);
+  sim.run(kSettle + 100);
+
+  const std::vector<uint8_t> &blob = board().nvs.ns["saucedeck"]["keymap"];
+  TEST_ASSERT_EQUAL_UINT8(3, blob[4]);
+  KeyMap back;
+  TEST_ASSERT_TRUE(deserializeKeyMap(blob.data(), blob.size(), back));
+  for (uint8_t i = 0; i < kKeyCount; i++) {
+    TEST_ASSERT_EQUAL_UINT8(iconByName(kIcons[i]), back.entry(i).icon);
+    TEST_ASSERT_EQUAL_STRING("ok", back.entry(i).label);
+  }
+  TEST_ASSERT_EQUAL_STRING("f13", back.entry(0).value);
+  for (uint8_t pos = 1; pos <= 12; pos++) TEST_ASSERT_FALSE_MESSAGE(hlinesIn(pos).empty(), "icon tile");
+}
+
 int main(int, char **) {
   UNITY_BEGIN();
+  RUN_TEST(test_portal_save_with_icons_upgrades_v2_blob_to_v3);
   RUN_TEST(test_boot_shows_default_legends_f13_to_f24);
   RUN_TEST(test_labels_without_icons_become_legends);
   RUN_TEST(test_icon_tile_draws_icon_runs_in_box_and_one_line_label);

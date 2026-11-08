@@ -76,7 +76,7 @@ Tile geometry is unchanged from Plan 4: x = c*80+3, y = 24+r*54, 74×50, radius 
 - `test_keymap`: `setIcon` cases; v3 round-trip with icons; v2 blob loads with icon 0; blob with icon id 21 rejected; `==` sees icon changes.
 - Label cut: covered by the existing `fitLine` tests in `test_legend`; sim checks all 12 preset labels print whole in FreeSans7pt7b.
 - Sim (`test_sim_display`):
-  - icon tile: every recorded hline lies inside its 24×24 box, and the label is printed at baseline y+45;
+  - icon tile: every recorded hline lies inside its 24×24 box, and the label is printed at baseline y+44;
   - pressed icon key draws hlines in black;
   - text tile unchanged (existing tests stay green).
   - Simulator support: `SimLcd` records and rasterizes `drawFastHLine`.

@@ -6,6 +6,7 @@
 // Art is ASCII: 24 rows of 24 chars, '#' = ink, '.' = empty. Outer 1 px ring stays empty.
 // Editing an icon = editing its rows. Preview: python3 tools/icons_preview.py out.png
 // Spec: docs/superpowers/specs/2026-11-08-key-icons-design.md section 2.
+// Original 24x24 art drawn for this project (2026-11-08); no third-party source.
 
 constexpr uint8_t kIconCount = 20;
 constexpr uint8_t kIconSize = 24;
@@ -17,7 +18,7 @@ struct IconRun {
 namespace icons_detail {
 
 // camera
-static const char *const kIconCamera[kIconSize] = {
+inline constexpr const char *kIconCamera[kIconSize] = {
     "........................",
     "........................",
     "........................",
@@ -45,7 +46,7 @@ static const char *const kIconCamera[kIconSize] = {
 };
 
 // globe
-static const char *const kIconGlobe[kIconSize] = {
+inline constexpr const char *kIconGlobe[kIconSize] = {
     "........................",
     "........................",
     ".........######.........",
@@ -73,7 +74,7 @@ static const char *const kIconGlobe[kIconSize] = {
 };
 
 // envelope
-static const char *const kIconEnvelope[kIconSize] = {
+inline constexpr const char *kIconEnvelope[kIconSize] = {
     "........................",
     "........................",
     "........................",
@@ -101,7 +102,7 @@ static const char *const kIconEnvelope[kIconSize] = {
 };
 
 // plane
-static const char *const kIconPlane[kIconSize] = {
+inline constexpr const char *kIconPlane[kIconSize] = {
     "........................",
     "........................",
     "........................",
@@ -129,7 +130,7 @@ static const char *const kIconPlane[kIconSize] = {
 };
 
 // cube
-static const char *const kIconCube[kIconSize] = {
+inline constexpr const char *kIconCube[kIconSize] = {
     "........................",
     "........................",
     "..........####..........",
@@ -157,7 +158,7 @@ static const char *const kIconCube[kIconSize] = {
 };
 
 // gear
-static const char *const kIconGear[kIconSize] = {
+inline constexpr const char *kIconGear[kIconSize] = {
     "........................",
     "........................",
     "..........####..........",
@@ -185,7 +186,7 @@ static const char *const kIconGear[kIconSize] = {
 };
 
 // question
-static const char *const kIconQuestion[kIconSize] = {
+inline constexpr const char *kIconQuestion[kIconSize] = {
     "........................",
     "........................",
     "..........####..........",
@@ -213,7 +214,7 @@ static const char *const kIconQuestion[kIconSize] = {
 };
 
 // play
-static const char *const kIconPlay[kIconSize] = {
+inline constexpr const char *kIconPlay[kIconSize] = {
     "........................",
     "........................",
     "........................",
@@ -241,7 +242,7 @@ static const char *const kIconPlay[kIconSize] = {
 };
 
 // eye-off
-static const char *const kIconEyeOff[kIconSize] = {
+inline constexpr const char *kIconEyeOff[kIconSize] = {
     "........................",
     "........................",
     "...##...................",
@@ -269,7 +270,7 @@ static const char *const kIconEyeOff[kIconSize] = {
 };
 
 // chat
-static const char *const kIconChat[kIconSize] = {
+inline constexpr const char *kIconChat[kIconSize] = {
     "........................",
     "........................",
     "........................",
@@ -297,7 +298,7 @@ static const char *const kIconChat[kIconSize] = {
 };
 
 // weather
-static const char *const kIconWeather[kIconSize] = {
+inline constexpr const char *kIconWeather[kIconSize] = {
     "........................",
     "........................",
     "..............##........",
@@ -325,7 +326,7 @@ static const char *const kIconWeather[kIconSize] = {
 };
 
 // printer
-static const char *const kIconPrinter[kIconSize] = {
+inline constexpr const char *kIconPrinter[kIconSize] = {
     "........................",
     "........................",
     "..####################..",
@@ -353,7 +354,7 @@ static const char *const kIconPrinter[kIconSize] = {
 };
 
 // mic
-static const char *const kIconMic[kIconSize] = {
+inline constexpr const char *kIconMic[kIconSize] = {
     "........................",
     "........................",
     "..........####..........",
@@ -381,7 +382,7 @@ static const char *const kIconMic[kIconSize] = {
 };
 
 // music
-static const char *const kIconMusic[kIconSize] = {
+inline constexpr const char *kIconMusic[kIconSize] = {
     "........................",
     "........................",
     ".................####...",
@@ -409,7 +410,7 @@ static const char *const kIconMusic[kIconSize] = {
 };
 
 // folder
-static const char *const kIconFolder[kIconSize] = {
+inline constexpr const char *kIconFolder[kIconSize] = {
     "........................",
     "........................",
     "........................",
@@ -437,7 +438,7 @@ static const char *const kIconFolder[kIconSize] = {
 };
 
 // terminal
-static const char *const kIconTerminal[kIconSize] = {
+inline constexpr const char *kIconTerminal[kIconSize] = {
     "........................",
     "........................",
     "........................",
@@ -465,7 +466,7 @@ static const char *const kIconTerminal[kIconSize] = {
 };
 
 // lock
-static const char *const kIconLock[kIconSize] = {
+inline constexpr const char *kIconLock[kIconSize] = {
     "........................",
     "........................",
     ".........######.........",
@@ -493,7 +494,7 @@ static const char *const kIconLock[kIconSize] = {
 };
 
 // moon
-static const char *const kIconMoon[kIconSize] = {
+inline constexpr const char *kIconMoon[kIconSize] = {
     "........................",
     "........................",
     ".........##.............",
@@ -521,7 +522,7 @@ static const char *const kIconMoon[kIconSize] = {
 };
 
 // bolt
-static const char *const kIconBolt[kIconSize] = {
+inline constexpr const char *kIconBolt[kIconSize] = {
     "........................",
     "........................",
     "...............#........",
@@ -549,7 +550,7 @@ static const char *const kIconBolt[kIconSize] = {
 };
 
 // home
-static const char *const kIconHome[kIconSize] = {
+inline constexpr const char *kIconHome[kIconSize] = {
     "........................",
     "........................",
     "...........##...........",
@@ -576,7 +577,7 @@ static const char *const kIconHome[kIconSize] = {
     "........................",
 };
 
-static const char *const *const kIconArt[kIconCount] = {
+inline constexpr const char *const *kIconArt[kIconCount] = {
     kIconCamera, kIconGlobe, kIconEnvelope, kIconPlane,
     kIconCube, kIconGear, kIconQuestion, kIconPlay,
     kIconEyeOff, kIconChat, kIconWeather, kIconPrinter,
@@ -584,7 +585,7 @@ static const char *const *const kIconArt[kIconCount] = {
     kIconLock, kIconMoon, kIconBolt, kIconHome,
 };
 
-static const char *const kIconNames[kIconCount] = {
+inline constexpr const char *kIconNames[kIconCount] = {
     "camera", "globe", "envelope", "plane", "cube",
     "gear", "question", "play", "eye-off", "chat",
     "weather", "printer", "mic", "music", "folder",

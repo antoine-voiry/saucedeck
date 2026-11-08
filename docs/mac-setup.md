@@ -24,6 +24,10 @@ Tried 2026-10-24 on macOS 26.7.1, bench-verified:
    `http://saucedeck.local/param`, **Load preset** → `presets/mac-daily.json`, **Save**,
    then press knob 1 on the deck.
 
+   After flashing icon firmware, the stored key map stays text-only (no icons) until you reload the
+   preset, press Save and confirm with knob 1. Rolling back to older firmware rejects the new (v3)
+   key map blob, so the deck shows the default F13-F24 until you Save a map again.
+
 ## Key map
 
 | Deck key | Sends | Action | LCD label | Icon |
