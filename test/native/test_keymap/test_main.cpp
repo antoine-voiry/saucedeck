@@ -3,6 +3,7 @@
 #include <string.h>
 #include "keystroke.h"
 #include "keymap.h"
+#include "icons.h"
 
 void setUp() {}
 void tearDown() {}
@@ -267,7 +268,7 @@ void test_blob_roundtrip_keeps_labels() {
   uint8_t buf[kKeyMapBlobMax];
   size_t n = serializeKeyMap(m, buf, sizeof buf);
   TEST_ASSERT_TRUE(n > 0);
-  TEST_ASSERT_EQUAL_UINT8(2, buf[4]);  // blob version
+  TEST_ASSERT_EQUAL_UINT8(3, buf[4]);  // blob version
   KeyMap back;
   TEST_ASSERT_TRUE(deserializeKeyMap(buf, n, back));
   TEST_ASSERT_TRUE(back == m);
@@ -337,11 +338,110 @@ void test_blob_rejects_unknown_version() {
   KeyMap m;
   uint8_t buf[kKeyMapBlobMax];
   size_t n = serializeKeyMap(m, buf, sizeof buf);
-  buf[4] = 3;
+  buf[4] = 4;
   uint32_t c = crc32(buf, n - 4);
   buf[n - 4] = c & 0xFF; buf[n - 3] = (c >> 8) & 0xFF; buf[n - 2] = (c >> 16) & 0xFF; buf[n - 1] = c >> 24;
   KeyMap target;
   TEST_ASSERT_FALSE(deserializeKeyMap(buf, n, target));
+}
+
+// --- icons (blob v3, 2026-11-08) ---
+
+static void fixCrc(uint8_t *buf, size_t n) {
+  uint32_t c = crc32(buf, n - 4);
+  for (int k = 0; k < 4; k++) buf[n - 4 + k] = static_cast<uint8_t>(c >> (8 * k));
+}
+
+void test_icon_default_zero() {
+  KeyMap m;
+  for (uint8_t i = 0; i < kKeyCount; i++) TEST_ASSERT_EQUAL_UINT8(0, m.entry(i).icon);
+}
+
+void test_icon_set_known_case_insensitive_and_clear() {
+  KeyMap m;
+  TEST_ASSERT_EQUAL(KeyMapError::None, m.setIcon(3, "camera"));
+  TEST_ASSERT_EQUAL_UINT8(iconByName("camera"), m.entry(3).icon);
+  TEST_ASSERT_EQUAL(KeyMapError::None, m.setIcon(3, "EYE-OFF"));
+  TEST_ASSERT_EQUAL_UINT8(iconByName("eye-off"), m.entry(3).icon);
+  TEST_ASSERT_EQUAL(KeyMapError::None, m.setIcon(3, ""));
+  TEST_ASSERT_EQUAL_UINT8(0, m.entry(3).icon);
+  m.setIcon(3, "bolt");
+  TEST_ASSERT_EQUAL(KeyMapError::None, m.setIcon(3, nullptr));
+  TEST_ASSERT_EQUAL_UINT8(0, m.entry(3).icon);
+}
+
+void test_icon_rejections() {
+  KeyMap m;
+  m.setIcon(2, "gear");
+  TEST_ASSERT_EQUAL(KeyMapError::BadIcon, m.setIcon(2, "nope"));
+  TEST_ASSERT_EQUAL_UINT8(iconByName("gear"), m.entry(2).icon);  // unchanged
+  TEST_ASSERT_EQUAL(KeyMapError::BadIndex, m.setIcon(12, "gear"));
+}
+
+void test_keymap_equality_includes_icon() {
+  KeyMap a, b;
+  b.setIcon(5, "gear");
+  TEST_ASSERT_FALSE(a == b);
+  a.setIcon(5, "gear");
+  TEST_ASSERT_TRUE(a == b);
+}
+
+void test_blob_v3_roundtrip_keeps_icons() {
+  KeyMap m;
+  m.setLabel(0, "Shot");
+  m.setIcon(0, "camera");
+  m.setIcon(11, "home");
+  uint8_t buf[kKeyMapBlobMax];
+  size_t n = serializeKeyMap(m, buf, sizeof buf);
+  TEST_ASSERT_TRUE(n > 0);
+  KeyMap back;
+  TEST_ASSERT_TRUE(deserializeKeyMap(buf, n, back));
+  TEST_ASSERT_TRUE(back == m);
+  TEST_ASSERT_EQUAL_UINT8(iconByName("camera"), back.entry(0).icon);
+  TEST_ASSERT_EQUAL_UINT8(iconByName("home"), back.entry(11).icon);
+}
+
+void test_blob_v2_still_loads_with_no_icons() {
+  // Hand-built v2: magic, 2, 12 x [type, vlen, value, llen, label], CRC.
+  uint8_t buf[kKeyMapBlobMax];
+  const uint8_t head[] = {'S', 'D', 'K', 'M', 2};
+  memcpy(buf, head, sizeof head);
+  size_t p = sizeof head;
+  for (uint8_t i = 0; i < kKeyCount; i++) {
+    char v[8];
+    size_t n = static_cast<size_t>(snprintf(v, sizeof v, "f%u", 13u + i));
+    buf[p++] = 0;
+    buf[p++] = static_cast<uint8_t>(n);
+    memcpy(buf + p, v, n);
+    p += n;
+    buf[p++] = 2;
+    buf[p++] = 'o';
+    buf[p++] = 'k';
+  }
+  p += 4;
+  fixCrc(buf, p);
+  KeyMap back;
+  back.setIcon(0, "gear");
+  TEST_ASSERT_TRUE(deserializeKeyMap(buf, p, back));
+  TEST_ASSERT_EQUAL_STRING("ok", back.entry(0).label);
+  TEST_ASSERT_EQUAL_STRING("f24", back.entry(11).value);
+  for (uint8_t i = 0; i < kKeyCount; i++) TEST_ASSERT_EQUAL_UINT8(0, back.entry(i).icon);
+}
+
+void test_blob_v3_rejects_icon_id_above_count() {
+  KeyMap m;
+  uint8_t buf[kKeyMapBlobMax];
+  size_t n = serializeKeyMap(m, buf, sizeof buf);
+  // key 0: [5]=type [6]=vlen [7..9]="f13" [10]=llen(0) [11]=icon
+  TEST_ASSERT_EQUAL_UINT8(0, buf[10]);
+  buf[11] = kIconCount;
+  fixCrc(buf, n);
+  KeyMap target;
+  TEST_ASSERT_TRUE(deserializeKeyMap(buf, n, target));  // 20 = last valid id
+  buf[11] = kIconCount + 1;
+  fixCrc(buf, n);
+  KeyMap target2;
+  TEST_ASSERT_FALSE(deserializeKeyMap(buf, n, target2));
 }
 
 int main(int, char **) {
@@ -377,5 +477,12 @@ int main(int, char **) {
   RUN_TEST(test_blob_v1_still_loads_with_empty_labels);
   RUN_TEST(test_blob_rejects_valid_crc_but_unprintable_label);
   RUN_TEST(test_blob_rejects_unknown_version);
+  RUN_TEST(test_icon_default_zero);
+  RUN_TEST(test_icon_set_known_case_insensitive_and_clear);
+  RUN_TEST(test_icon_rejections);
+  RUN_TEST(test_keymap_equality_includes_icon);
+  RUN_TEST(test_blob_v3_roundtrip_keeps_icons);
+  RUN_TEST(test_blob_v2_still_loads_with_no_icons);
+  RUN_TEST(test_blob_v3_rejects_icon_id_above_count);
   return UNITY_END();
 }

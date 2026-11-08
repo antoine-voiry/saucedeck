@@ -11,7 +11,7 @@ uint8_t SimDeck::mcpBitForKey(uint8_t pos) {
 }
 
 // Pulls the next quoted string after `field` out of the preset file. The preset format is
-// ours (presets/*.json: one object per key with "type" and "value"), so a scanner is enough.
+// ours (presets/*.json: one object per key with "label", "type", "value" and optional "icon"), so a scanner is enough.
 static bool nextField(const std::string &s, size_t &pos, const char *field, std::string &out) {
   std::string key = std::string("\"") + field + "\"";
   size_t k = s.find(key, pos);
@@ -42,6 +42,13 @@ bool SimDeck::loadPresetIntoNvs(const char *path) {
       return false;
     if (m.setFromStrings(i, type.c_str(), value.c_str()) != KeyMapError::None) return false;
     if (m.setLabel(i, label.c_str()) != KeyMapError::None) return false;
+    // "icon" is optional and comes last in the key object: only look before the next key's "label".
+    size_t nextKey = s.find("\"label\"", pos);
+    std::string icon;
+    size_t ipos = pos;
+    if (nextField(s, ipos, "icon", icon) && (nextKey == std::string::npos || ipos <= nextKey) &&
+        m.setIcon(i, icon.c_str()) != KeyMapError::None)
+      return false;
   }
   uint8_t blob[kKeyMapBlobMax];
   size_t len = serializeKeyMap(m, blob, sizeof blob);

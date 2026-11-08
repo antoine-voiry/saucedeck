@@ -8,6 +8,7 @@
 #include <WiFi.h>
 #include <WiFiManager.h>
 #include <esp_random.h>
+#include "icons.h"
 
 static WiFiManager wm;
 static WifiState state = WifiState::Off;
@@ -15,7 +16,9 @@ static char apPass[9];
 static char typeBuf[kKeyCount][10];
 static char valueBuf[kKeyCount][kKeyValueMax + 1];
 static char labelBuf[kKeyCount][kKeyLabelMax + 1];
-static constexpr size_t kFields = 3;  // per key: type, value, label
+static constexpr size_t kIconNameMax = 10;
+static char iconBuf[kKeyCount][kIconNameMax + 1];
+static constexpr size_t kFields = 4;  // per key: type, value, label, icon
 static char ids[kKeyCount * kFields][4];
 static char labels[kKeyCount * kFields][24];
 static WiFiManagerParameter *params[kKeyCount * kFields];
@@ -23,11 +26,13 @@ static bool paramsAdded = false;
 static bool savedPending = false;
 static bool webPortal = false;
 
-// Preset loader (presets/*.json): browser-side only, it just fills the 36 inputs below.
+// Preset loader (presets/*.json): browser-side only, it just fills the 48 inputs below.
 // The deck still re-validates every field on Save and waits for the knob 1 confirm.
 static const char kPresetHtml[] =
     "<p><b>Load preset</b> (.json, 12 keys), check the fields, then Save.</p>"
     "<input type='file' id='pf' accept='.json,application/json'><div id='ps'></div>"
+    "<p><small>Icons: camera globe envelope plane cube gear question play eye-off chat weather "
+    "printer mic music folder terminal lock moon bolt home</small></p>"
     "<script>document.getElementById('pf').onchange=function(e){"
     "var f=e.target.files[0],s=document.getElementById('ps');if(!f)return;"
     "f.text().then(function(t){var k=JSON.parse(t).keys;"
@@ -37,10 +42,13 @@ static const char kPresetHtml[] =
     "if(typeof x.value!='string'||!x.value.length||x.value.length>56)"
     "throw Error('key '+(i+1)+': value 1-56 chars');"
     "if(x.label!==undefined&&(typeof x.label!='string'||x.label.length>16))"
-    "throw Error('key '+(i+1)+': label 0-16 chars');});"
+    "throw Error('key '+(i+1)+': label 0-16 chars');"
+    "if(x.icon!==undefined&&(typeof x.icon!='string'||x.icon.length>10))"
+    "throw Error('key '+(i+1)+': bad icon');});"
     "k.forEach(function(x,i){document.getElementById('t'+(i+1)).value=x.type;"
     "document.getElementById('v'+(i+1)).value=x.value;"
-    "document.getElementById('l'+(i+1)).value=x.label||'';});"
+    "document.getElementById('l'+(i+1)).value=x.label||'';"
+    "document.getElementById('i'+(i+1)).value=x.icon||'';});"
     "s.textContent='Loaded '+f.name+'. Press Save, then knob 1 on the deck.';"
     "}).catch(function(err){s.textContent='Bad preset: '+err.message;});};</script>";
 static WiFiManagerParameter presetParam(kPresetHtml);  // custom HTML: no id, no value
@@ -64,10 +72,12 @@ static void buildParams(const KeyMap &m) {
     snprintf(typeBuf[i], sizeof typeBuf[i], "%s", keyTypeName(m.entry(i).type));
     snprintf(valueBuf[i], sizeof valueBuf[i], "%s", m.entry(i).value);
     snprintf(labelBuf[i], sizeof labelBuf[i], "%s", m.entry(i).label);
+    snprintf(iconBuf[i], sizeof iconBuf[i], "%s", iconName(m.entry(i).icon));
     if (paramsAdded) {
       p[0]->setValue(typeBuf[i], 9);
       p[1]->setValue(valueBuf[i], kKeyValueMax);
       p[2]->setValue(labelBuf[i], kKeyLabelMax);
+      p[3]->setValue(iconBuf[i], kIconNameMax);
       continue;
     }
     const unsigned n = i + 1;
@@ -76,10 +86,13 @@ static void buildParams(const KeyMap &m) {
     snprintf(ids[kFields * i + 2], sizeof ids[0], "l%u", n);
     snprintf(labels[kFields * i], sizeof labels[0], "Key %u type", n);
     snprintf(labels[kFields * i + 1], sizeof labels[0], "Key %u value", n);
+    snprintf(ids[kFields * i + 3], sizeof ids[0], "i%u", n);
     snprintf(labels[kFields * i + 2], sizeof labels[0], "Key %u label", n);
+    snprintf(labels[kFields * i + 3], sizeof labels[0], "Key %u icon", n);
     p[0] = new WiFiManagerParameter(ids[kFields * i], labels[kFields * i], typeBuf[i], 9);
     p[1] = new WiFiManagerParameter(ids[kFields * i + 1], labels[kFields * i + 1], valueBuf[i], kKeyValueMax);
     p[2] = new WiFiManagerParameter(ids[kFields * i + 2], labels[kFields * i + 2], labelBuf[i], kKeyLabelMax);
+    p[3] = new WiFiManagerParameter(ids[kFields * i + 3], labels[kFields * i + 3], iconBuf[i], kIconNameMax);
     for (size_t f = 0; f < kFields; f++) wm.addParameter(p[f]);
   }
   paramsAdded = true;
@@ -138,7 +151,8 @@ bool portalTakeStaged(KeyMap &out, uint8_t &badKey) {
   for (uint8_t i = 0; i < kKeyCount; i++) {
     WiFiManagerParameter **p = &params[kFields * i];
     if (m.setFromStrings(i, p[0]->getValue(), p[1]->getValue()) != KeyMapError::None ||
-        m.setLabel(i, p[2]->getValue()) != KeyMapError::None) {
+        m.setLabel(i, p[2]->getValue()) != KeyMapError::None ||
+        m.setIcon(i, p[3]->getValue()) != KeyMapError::None) {
       badKey = i + 1;
       return true;
     }
