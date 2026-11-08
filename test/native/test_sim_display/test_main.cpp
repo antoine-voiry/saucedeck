@@ -5,6 +5,8 @@
 #include <vector>
 #include <Fonts/FreeSans9pt7b.h>
 #include <Fonts/FreeSansBold9pt7b.h>
+#include "fonts/FreeSans7pt7b.h"
+#include "fonts/FreeSansBold7pt7b.h"
 #include "frame.h"
 #include "keymap.h"
 #include "reset_log.h"
@@ -77,8 +79,16 @@ static std::vector<SimLcdRect> hlinesIn(uint8_t pos) {
   return out;
 }
 
-static uint8_t advR(char c) { return FreeSans9pt7b.glyph[c - FreeSans9pt7b.first].xAdvance; }
-static uint8_t advB(char c) { return FreeSansBold9pt7b.glyph[c - FreeSansBold9pt7b.first].xAdvance; }
+// Icon tile labels: generated FreeSans 7pt (include/fonts), max 72 px, baseline y+44.
+static uint8_t advR7(char c) { return FreeSans7pt7b.glyph[c - FreeSans7pt7b.first].xAdvance; }
+static uint8_t advB7(char c) { return FreeSansBold7pt7b.glyph[c - FreeSansBold7pt7b.first].xAdvance; }
+
+static const SimLcdText *labelOf(uint8_t pos) {
+  const SimLcdText *label = nullptr;
+  for (const SimLcdText &t : board().lcd.texts)
+    if (t.y == tileY(pos) + 44 && t.x >= tileX(pos) && t.x < tileX(pos) + 74) label = &t;
+  return label;
+}
 
 SIM_TEST(test_boot_shows_default_legends_f13_to_f24) {
   SimDeck sim;
@@ -122,22 +132,26 @@ SIM_TEST(test_icon_tile_draws_icon_runs_in_box_and_one_line_label) {
     TEST_ASSERT_TRUE(insideIconBox(h, 1));
     TEST_ASSERT_EQUAL_HEX16(0xFFFF, h.c);  // idle: white ink
   }
-  // Label: one line at baseline y+45, chosen by chooseOneLine with the real font advances.
+  // Label: one line at baseline y+44, whole, in a 7pt face chosen by chooseOneLine.
   char want[kLegendLineMax + 4];
   LegendFont f;
-  chooseOneLine("Screenshot", 68, advB, advR, f, want, sizeof want);
-  const SimLcdText *label = nullptr;
-  for (const SimLcdText &t : board().lcd.texts)
-    if (t.y == tileY(1) + 45 && t.x >= tileX(1) && t.x < tileX(1) + 74) label = &t;
+  chooseOneLine("Screenshot", 72, advB7, advR7, f, want, sizeof want);
+  TEST_ASSERT_EQUAL_STRING("Screenshot", want);
+  const SimLcdText *label = labelOf(1);
   TEST_ASSERT_NOT_NULL(label);
-  TEST_ASSERT_EQUAL_STRING(want, label->s.c_str());
-  const int16_t w = widthIn(f == LegendFont::Bold ? FreeSansBold9pt7b : FreeSans9pt7b, want);
-  TEST_ASSERT_TRUE(w <= 68);
+  TEST_ASSERT_EQUAL_STRING("Screenshot", label->s.c_str());
+  const GFXfont &face = f == LegendFont::Bold ? FreeSansBold7pt7b : FreeSans7pt7b;
+  const GFXfont *used = static_cast<const GFXfont *>(label->font);
+  TEST_ASSERT_NOT_NULL(used);
+  TEST_ASSERT_EQUAL_INT16(widthIn(face, "Screenshot"), widthIn(*used, "Screenshot"));  // fonts static per TU
+  TEST_ASSERT_EQUAL_UINT8(face.yAdvance, used->yAdvance);
+  const int16_t w = widthIn(face, "Screenshot");
+  TEST_ASSERT_TRUE(w <= 72);
   TEST_ASSERT_EQUAL(tileX(1) + (74 - w) / 2, label->x);
   // Nothing else printed on tile 1 (no two-line legend).
   for (const SimLcdText &t : board().lcd.texts)
     if (t.x >= tileX(1) && t.x < tileX(1) + 74 && t.y > tileY(1) && t.y < tileY(1) + 50)
-      TEST_ASSERT_EQUAL(tileY(1) + 45, t.y);
+      TEST_ASSERT_EQUAL(tileY(1) + 44, t.y);
   // Short label fits bold whole: "Gmail" (key 3).
   TEST_ASSERT_TRUE(board().lcd.printedExact("Gmail"));
   // Ink pixels land in the framebuffer inside the icon box.
@@ -146,6 +160,23 @@ SIM_TEST(test_icon_tile_draws_icon_runs_in_box_and_one_line_label) {
     for (int x = tileX(1) + 25; x < tileX(1) + 49; x++)
       if (board().lcd.fb[y][x] == 0xFFFF) ink++;
   TEST_ASSERT_GREATER_THAN(20, ink);
+}
+
+SIM_TEST(test_all_mac_daily_labels_fit_whole_on_icon_tiles) {
+  SimDeck sim;
+  TEST_ASSERT_TRUE(sim.loadPresetIntoNvs(SIM_PROJECT_DIR "/presets/mac-daily.json"));
+  sim.boot();
+  sim.run(kAfterSplash);
+  const char *labels[12] = {"Screenshot", "Chrome", "Gmail",    "Telegram", "Fusion 360", "Settings",
+                            "Help",       "YouTube", "Hide app", "iMessage", "Weather",    "Bambu"};
+  for (uint8_t pos = 1; pos <= 12; pos++) {
+    const SimLcdText *label = labelOf(pos);
+    TEST_ASSERT_NOT_NULL_MESSAGE(label, labels[pos - 1]);
+    TEST_ASSERT_EQUAL_STRING(labels[pos - 1], label->s.c_str());
+    const GFXfont *used = static_cast<const GFXfont *>(label->font);
+    TEST_ASSERT_TRUE_MESSAGE(widthIn(*used, labels[pos - 1]) <= 72, labels[pos - 1]);
+    TEST_ASSERT_TRUE(label->x >= tileX(pos) + 1);
+  }
 }
 
 SIM_TEST(test_pressed_icon_tile_draws_black_ink) {
@@ -592,6 +623,7 @@ int main(int, char **) {
   RUN_TEST(test_boot_shows_default_legends_f13_to_f24);
   RUN_TEST(test_labels_without_icons_become_legends);
   RUN_TEST(test_icon_tile_draws_icon_runs_in_box_and_one_line_label);
+  RUN_TEST(test_all_mac_daily_labels_fit_whole_on_icon_tiles);
   RUN_TEST(test_pressed_icon_tile_draws_black_ink);
   RUN_TEST(test_icon_zero_key_keeps_text_legend_among_icon_tiles);
   RUN_TEST(test_key_press_repaints_only_its_tile);

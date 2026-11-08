@@ -143,7 +143,7 @@ void test_legend_multiword_overlong_falls_back_to_wrap() {
 
 static LegendFont one(const char *text, char *out, size_t cap = 40) {
   LegendFont f = LegendFont::Regular;
-  chooseOneLine(text, 68, boldW, regW, f, out, cap);
+  chooseOneLine(text, 72, boldW, regW, f, out, cap);  // icon label: 72 px (7pt fonts)
   return f;
 }
 
@@ -151,12 +151,14 @@ void test_one_line_bold_fits() {
   char out[40];
   TEST_ASSERT_TRUE(one("Chrome", out) == LegendFont::Bold);  // 54 px bold
   TEST_ASSERT_EQUAL_STRING("Chrome", out);
+  TEST_ASSERT_TRUE(one("Abcdefgh", out) == LegendFont::Bold);  // 72 px bold: exact fit
+  TEST_ASSERT_EQUAL_STRING("Abcdefgh", out);
 }
 
 void test_one_line_regular_whole() {
   char out[40];
-  TEST_ASSERT_TRUE(one("Abcdefgh", out) == LegendFont::Regular);  // bold 72, regular 64
-  TEST_ASSERT_EQUAL_STRING("Abcdefgh", out);
+  TEST_ASSERT_TRUE(one("Abcdefghi", out) == LegendFont::Regular);  // bold 81 > 72, regular 72
+  TEST_ASSERT_EQUAL_STRING("Abcdefghi", out);
 }
 
 void test_one_line_regular_cut() {
@@ -167,7 +169,7 @@ void test_one_line_regular_cut() {
   TEST_ASSERT_EQUAL_STRING("...", out + n - 3);
   uint16_t w = 0;
   for (size_t i = 0; i < n; i++) w += regW(out[i]);
-  TEST_ASSERT_TRUE(w <= 68);
+  TEST_ASSERT_TRUE(w <= 72);
 }
 
 void test_one_line_empty_bold() {
