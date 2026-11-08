@@ -118,8 +118,11 @@ bool portalStart(const KeyMap &current) {
 }
 
 void portalStop() {
-  if (webPortal) wm.stopWebPortal();
-  wm.stopConfigPortal();
+  // One shutdown only. WiFiManager 2.0.17 stopWebPortal() returns early when neither portal
+  // is active, else shuts down both (web portal + config AP). A second shutdown, or one with
+  // no portal up, calls server->handleClient() on a null server (WiFiManager.cpp:970): that
+  // crashed the deck on every Wi-Fi off while joined (core dump 2026-11-08).
+  wm.stopWebPortal();
   MDNS.end();
   WiFi.disconnect(true);
   WiFi.mode(WIFI_OFF);

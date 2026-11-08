@@ -324,16 +324,44 @@ bool WiFiManager::autoConnect(const char *ssid, const char *pass) {
     return true;
   }
   w.portalActive = w.portalOk;
+  w.serverUp = w.portalOk;  // startConfigPortal -> setupConfigPortal allocates the server
   return false;
 }
 bool WiFiManager::getConfigPortalActive() { return board().wifi.portalActive; }
-void WiFiManager::stopWebPortal() { board().wifi.webPortal = false; }
-bool WiFiManager::stopConfigPortal() {
-  board().wifi.portalActive = false;
+
+// WiFiManager 2.0.17 shutdownConfigPortal() (WiFiManager.cpp:957-985): returns early only if
+// webPortalActive, then calls server->handleClient() unconditionally. With the server already
+// freed (or never allocated) that is a null dereference: LoadProhibited at 0x0 on the chip
+// (core dump 2026-11-08). The sim aborts the device the same way.
+static bool shutdownConfigPortal() {
+  SimWifi &w = board().wifi;
+  if (w.webPortal) return false;
+  if (!w.serverUp) {
+    fprintf(stderr, "SIM CRASH: WiFiManager::shutdownConfigPortal server->handleClient() on null server\n");
+    abort();
+  }
+  w.serverUp = false;  // server->stop(); server.reset();
+  if (!w.portalActive) return false;
+  w.portalActive = false;  // dnsServer stop, soft AP off
   return true;
 }
+void WiFiManager::stopWebPortal() {  // WiFiManager.cpp:569
+  SimWifi &w = board().wifi;
+  if (!w.portalActive && !w.webPortal) return;
+  w.webPortal = false;
+  shutdownConfigPortal();
+}
+bool WiFiManager::stopConfigPortal() {  // non-blocking mode: straight to shutdownConfigPortal
+  if (blocking_) return true;
+  return shutdownConfigPortal();
+}
 bool WiFiManager::process() { return true; }
-void WiFiManager::startWebPortal() { board().wifi.webPortal = true; }
+void WiFiManager::startWebPortal() {  // WiFiManager.cpp startWebPortal
+  SimWifi &w = board().wifi;
+  if (w.portalActive || w.webPortal) return;
+  w.serverUp = true;
+  w.webPortal = true;
+}
 
 bool MDNSResponder::begin(const char *hostName) {
   board().wifi.mdnsName = hostName;

@@ -10,8 +10,9 @@ struct SimWifi {
   bool joinOk = false;     // saved credentials work
   bool portalOk = true;    // SAUCEDECK-setup AP comes up
   bool connected = false;
-  bool portalActive = false;
-  bool webPortal = false;
+  bool portalActive = false;  // WiFiManager configPortalActive (SAUCEDECK-setup AP)
+  bool webPortal = false;     // WiFiManager webPortalActive (param page on the home network)
+  bool serverUp = false;      // WiFiManager `server` is allocated (unique_ptr non-null)
   int mode = 0;            // wifi_mode_t
   int txPower = 0;
   int8_t rssi = -55;

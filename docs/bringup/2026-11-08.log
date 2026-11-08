@@ -1,0 +1,21 @@
+2026-11-08 bench: deck rebooted when Wi-Fi went off (owner: 'Wi-Fi disappeared').
+
+Reset log (portal /param, newest first):
+wdt, up 8 min; unknown, up 15 min; usb, up 6.3 h; task wdt, up 50.9 h; task wdt, up 17 s; software, up 50.6 h; task wdt, up 12.5 h; panic, up 823.9 h (uptime bogus: RTC garbage before the log existed)
+
+Core dump read from coredump partition 0x3F0000 (esptool read_flash after 1200 bps touch), decoded with esp_coredump against firmware.elf a9d6217:
+Crashed task handle: 0x3fced8f0, name: 'loopTask', GDB name: 'process 1070520560'
+Crashed task is not in the interrupt context
+exccause       0x1c (LoadProhibitedCause)
+excvaddr       0x0
+pc             0x4201939d          0x4201939d <WiFiManager::shutdownConfigPortal()+69>
+#0  0x4201939d in WiFiManager::shutdownConfigPortal (this=0x3fc9e9b4 <wm>) at .pio/libdeps/saucedeck/WiFiManager/WiFiManager.cpp:970
+#1  0x42019e7b in WiFiManager::stopConfigPortal (this=<optimized out>) at .pio/libdeps/saucedeck/WiFiManager/WiFiManager.cpp:2540
+#2  0x4201eabb in portalStop () at src/wifi_portal.cpp:122
+#3  0x4201e3d6 in run (actions=...) at src/main.cpp:94
+#4  loop () at src/main.cpp:171
+#5  0x420282e7 in loopTask (pvParameters=0x0) at /Users/antoine/.platformio/packages/framework-arduinoespressif32/cores/esp32/main.cpp:82
+#6  0x4037e988 in vPortTaskWrapper (pxCode=0x4202829c <loopTask(void*)>, pvParameters=0x0) at /home/runner/work/esp32-arduino-lib-builder/esp32-arduino-lib-builder/esp-idf/components/freertos/FreeRTOS-Kernel/portable/xtensa/port.c:139
+
+Root cause: portalStop() called stopWebPortal() then stopConfigPortal(); the second shutdown dereferences the freed server (WiFiManager 2.0.17 WiFiManager.cpp:970). Fixed: single stopWebPortal(). Sim reproduces (test_sim_wifi, RED 3/4 crash, GREEN 4/4).
+Helper connect (Hammerspoon restart 22:5x) did not appear in the reset log as its own reset.
