@@ -139,45 +139,6 @@ void test_legend_multiword_overlong_falls_back_to_wrap() {
   TEST_ASSERT_EQUAL_STRING("...", l.lines.line2 + strlen(l.lines.line2) - 3);
 }
 
-// --- chooseOneLine ---
-
-static LegendFont one(const char *text, char *out, size_t cap = 40) {
-  LegendFont f = LegendFont::Regular;
-  chooseOneLine(text, 72, boldW, regW, f, out, cap);  // icon label: 72 px (7pt fonts)
-  return f;
-}
-
-void test_one_line_bold_fits() {
-  char out[40];
-  TEST_ASSERT_TRUE(one("Chrome", out) == LegendFont::Bold);  // 54 px bold
-  TEST_ASSERT_EQUAL_STRING("Chrome", out);
-  TEST_ASSERT_TRUE(one("Abcdefgh", out) == LegendFont::Bold);  // 72 px bold: exact fit
-  TEST_ASSERT_EQUAL_STRING("Abcdefgh", out);
-}
-
-void test_one_line_regular_whole() {
-  char out[40];
-  TEST_ASSERT_TRUE(one("Abcdefghi", out) == LegendFont::Regular);  // bold 81 > 72, regular 72
-  TEST_ASSERT_EQUAL_STRING("Abcdefghi", out);
-}
-
-void test_one_line_regular_cut() {
-  char out[40];
-  TEST_ASSERT_TRUE(one("Fusion 360 Studio", out) == LegendFont::Regular);
-  size_t n = strlen(out);
-  TEST_ASSERT_TRUE(n >= 3);
-  TEST_ASSERT_EQUAL_STRING("...", out + n - 3);
-  uint16_t w = 0;
-  for (size_t i = 0; i < n; i++) w += regW(out[i]);
-  TEST_ASSERT_TRUE(w <= 72);
-}
-
-void test_one_line_empty_bold() {
-  char out[40] = "x";
-  TEST_ASSERT_TRUE(one("", out) == LegendFont::Bold);
-  TEST_ASSERT_EQUAL_STRING("", out);
-}
-
 // --- volume segments ---
 
 void test_lit_segments() {
@@ -251,10 +212,6 @@ int main() {
   RUN_TEST(test_legend_single_word_split_regular_when_bold_halves_too_wide);
   RUN_TEST(test_legend_overlong_ellipsis);
   RUN_TEST(test_legend_multiword_overlong_falls_back_to_wrap);
-  RUN_TEST(test_one_line_bold_fits);
-  RUN_TEST(test_one_line_regular_whole);
-  RUN_TEST(test_one_line_regular_cut);
-  RUN_TEST(test_one_line_empty_bold);
   RUN_TEST(test_lit_segments);
   RUN_TEST(test_lit_segments_one_and_two_percent);
   RUN_TEST(test_segment_gradient);

@@ -129,21 +129,6 @@ inline void chooseLegend(const char *text, uint16_t maxPx, GlyphWidthFn bold, Gl
   wrapLabel(text, maxPx, regular, out.lines);
 }
 
-// One-line label (icon tiles): bold if the whole text fits maxPx, else regular whole, else
-// regular cut with "..." (fitLine). out holds cap bytes (cap >= 4).
-inline void chooseOneLine(const char *text, uint16_t maxPx, GlyphWidthFn bold, GlyphWidthFn regular,
-                          LegendFont &font, char *out, size_t cap) {
-  size_t n = strlen(text);
-  font = LegendFont::Bold;
-  if (n < cap && theme_detail::px(text, n, bold) <= maxPx) {
-    memcpy(out, text, n);
-    out[n] = 0;
-    return;
-  }
-  font = LegendFont::Regular;
-  fitLine(text, maxPx, regular, out, cap);
-}
-
 // --- volume segments ---
 
 constexpr uint8_t kVolSegments = 20;

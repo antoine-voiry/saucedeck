@@ -134,7 +134,7 @@ small; FreeSans9pt (~12 px cap-to-descender) is the minimum. Bench-check at arm'
   `chooseLegend` (bold/regular, 1–2 lines, 68 px), 20 volume segments (`litSegments`,
   `segmentColor`, `segDelta`), `cardDotX`. Volume repaint = changed segments only.
   Spec: [Plan 4](../plans/2026-10-31-lcd-theme-candy-plan4.md).
-- Plan 5: keys with an icon draw a 24x24 icon above a one-line label (`chooseOneLine`); icon 0
+- Plan 5: keys with an icon draw a 24x24 icon above a one-line FreeSans 7pt label (`fitLine`, 72 px); icon 0
   keeps the text tile above. Spec: [key icons](2026-11-08-key-icons-design.md).
 
 ## 5. src/ glue

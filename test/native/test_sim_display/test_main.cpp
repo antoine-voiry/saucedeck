@@ -6,7 +6,6 @@
 #include <Fonts/FreeSans9pt7b.h>
 #include <Fonts/FreeSansBold9pt7b.h>
 #include "fonts/FreeSans7pt7b.h"
-#include "fonts/FreeSansBold7pt7b.h"
 #include "frame.h"
 #include "keymap.h"
 #include "reset_log.h"
@@ -79,9 +78,15 @@ static std::vector<SimLcdRect> hlinesIn(uint8_t pos) {
   return out;
 }
 
-// Icon tile labels: generated FreeSans 7pt (include/fonts), max 72 px, baseline y+44.
-static uint8_t advR7(char c) { return FreeSans7pt7b.glyph[c - FreeSans7pt7b.first].xAdvance; }
-static uint8_t advB7(char c) { return FreeSansBold7pt7b.glyph[c - FreeSansBold7pt7b.first].xAdvance; }
+// Icon tile labels: generated FreeSans 7pt regular (include/fonts), max 72 px, baseline y+44.
+
+// Fonts are static per translation unit: identify the face by its glyph table, not its address.
+static bool isRegular7(const void *font) {
+  const GFXfont *f = static_cast<const GFXfont *>(font);
+  const GFXfont &r = FreeSans7pt7b;
+  return f && f->first == r.first && f->last == r.last && f->yAdvance == r.yAdvance &&
+         memcmp(f->glyph, r.glyph, sizeof(GFXglyph) * (r.last - r.first + 1)) == 0;
+}
 
 static const SimLcdText *labelOf(uint8_t pos) {
   const SimLcdText *label = nullptr;
@@ -132,19 +137,12 @@ SIM_TEST(test_icon_tile_draws_icon_runs_in_box_and_one_line_label) {
     TEST_ASSERT_TRUE(insideIconBox(h, 1));
     TEST_ASSERT_EQUAL_HEX16(0xFFFF, h.c);  // idle: white ink
   }
-  // Label: one line at baseline y+44, whole, in a 7pt face chosen by chooseOneLine.
-  char want[kLegendLineMax + 4];
-  LegendFont f;
-  chooseOneLine("Screenshot", 72, advB7, advR7, f, want, sizeof want);
-  TEST_ASSERT_EQUAL_STRING("Screenshot", want);
+  // Label: one line at baseline y+44, whole, FreeSans 7pt regular (bold 7pt drops the i/j dot).
   const SimLcdText *label = labelOf(1);
   TEST_ASSERT_NOT_NULL(label);
   TEST_ASSERT_EQUAL_STRING("Screenshot", label->s.c_str());
-  const GFXfont &face = f == LegendFont::Bold ? FreeSansBold7pt7b : FreeSans7pt7b;
-  const GFXfont *used = static_cast<const GFXfont *>(label->font);
-  TEST_ASSERT_NOT_NULL(used);
-  TEST_ASSERT_EQUAL_INT16(widthIn(face, "Screenshot"), widthIn(*used, "Screenshot"));  // fonts static per TU
-  TEST_ASSERT_EQUAL_UINT8(face.yAdvance, used->yAdvance);
+  TEST_ASSERT_TRUE(isRegular7(label->font));
+  const GFXfont &face = FreeSans7pt7b;
   const int16_t w = widthIn(face, "Screenshot");
   TEST_ASSERT_TRUE(w <= 72);
   TEST_ASSERT_EQUAL(tileX(1) + (74 - w) / 2, label->x);
@@ -173,8 +171,8 @@ SIM_TEST(test_all_mac_daily_labels_fit_whole_on_icon_tiles) {
     const SimLcdText *label = labelOf(pos);
     TEST_ASSERT_NOT_NULL_MESSAGE(label, labels[pos - 1]);
     TEST_ASSERT_EQUAL_STRING(labels[pos - 1], label->s.c_str());
-    const GFXfont *used = static_cast<const GFXfont *>(label->font);
-    TEST_ASSERT_TRUE_MESSAGE(widthIn(*used, labels[pos - 1]) <= 72, labels[pos - 1]);
+    TEST_ASSERT_TRUE_MESSAGE(isRegular7(label->font), labels[pos - 1]);  // e.g. "Gmail": regular, not bold
+    TEST_ASSERT_TRUE_MESSAGE(widthIn(FreeSans7pt7b, labels[pos - 1]) <= 72, labels[pos - 1]);
     TEST_ASSERT_TRUE(label->x >= tileX(pos) + 1);
   }
 }

@@ -8,7 +8,6 @@
 #include <Fonts/FreeSansBold9pt7b.h>
 #include "driver/gpio.h"
 #include "fonts/FreeSans7pt7b.h"
-#include "fonts/FreeSansBold7pt7b.h"
 #include "deck_clock.h"
 #include "icons.h"
 #include "legend.h"
@@ -30,7 +29,8 @@ static constexpr int16_t kTileX0 = 3, kTileY0 = 24, kTilePitchX = 80, kTilePitch
 static constexpr int16_t kTileW = 74, kTileH = 50, kTileR = 8, kBandH = 5, kBandR = 3;
 static constexpr uint16_t kLabelW = 68;
 // Icon tile (spec 2026-11-08 key icons, section 6): 24x24 icon box, one-line label below in
-// generated FreeSans 7pt (include/fonts, tools/make_label_fonts.sh), max 72 px.
+// generated FreeSans 7pt regular (include/fonts, tools/make_label_fonts.sh), max 72 px, cut
+// with "..." past it. No bold: bold 7pt drops the i/j dot (docs/kb/toolchain.md).
 static constexpr int16_t kIconBoxDX = 25, kIconBoxDY = 8, kIconLabelBase = 44;
 static constexpr uint16_t kIconLabelW = 72;
 static constexpr uint8_t kIconRunsMax = 12;  // 24 px row -> at most 12 runs
@@ -78,7 +78,6 @@ static uint8_t advRegular(char c) { return advance(FreeSans9pt7b, c); }
 static uint8_t advBold(char c) { return advance(FreeSansBold9pt7b, c); }
 static uint8_t advBig(char c) { return advance(FreeSansBold12pt7b, c); }
 static uint8_t advSmall(char c) { return advance(FreeSans7pt7b, c); }
-static uint8_t advSmallBold(char c) { return advance(FreeSansBold7pt7b, c); }
 
 static int16_t textWidth(const char *s, GlyphWidthFn w) {
   int16_t px = 0;
@@ -120,11 +119,8 @@ static void drawTile(uint8_t i, const KeyEntry &e, uint8_t level, bool failed) {
         tft.drawFastHLine(x + kIconBoxDX + runs[k].x, y + kIconBoxDY + row, runs[k].len, look.text);
     }
     char line[kLegendLineMax + 4];
-    LegendFont font;
-    chooseOneLine(text, kIconLabelW, advSmallBold, advSmall, font, line, sizeof line);
-    const bool bold = font == LegendFont::Bold;
-    printCentered(bold ? FreeSansBold7pt7b : FreeSans7pt7b, bold ? advSmallBold : advSmall, line, x, kTileW,
-                  y + kIconLabelBase, look.text);
+    fitLine(text, kIconLabelW, advSmall, line, sizeof line);
+    printCentered(FreeSans7pt7b, advSmall, line, x, kTileW, y + kIconLabelBase, look.text);
     return;
   }
   Legend lg;

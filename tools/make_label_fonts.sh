@@ -1,5 +1,6 @@
 #!/bin/sh
-# Rebuild include/fonts/FreeSans7pt7b.h + FreeSansBold7pt7b.h (icon tile labels, Plan 5).
+# Rebuild include/fonts/FreeSans7pt7b.h (icon tile labels, Plan 5). Regular only: bold 7pt
+# comes out with dotless i/j (docs/kb/toolchain.md).
 # Source: GNU FreeFont 20120503 TTFs, converted by Adafruit GFX fontconvert (DPI 141) from the
 # library PlatformIO already fetched (.pio/libdeps/saucedeck, run `pio run -e saucedeck` once).
 # Needs: curl, shasum, cc, FreeType (brew install freetype pkg-config). Work files go to a temp dir.
@@ -30,7 +31,7 @@ sed -i.bak 's|"../gfxfont.h"|"gfxfont.h"|' "$WORK/fontconvert.c"
 cc -O2 -w -o "$WORK/fontconvert" "$WORK/fontconvert.c" $(pkg-config --cflags --libs freetype2)
 
 mkdir -p "$OUT"
-for face in FreeSans FreeSansBold; do
+for face in FreeSans; do
   name="${face}${SIZE}pt7b"
   {
     echo "// $name: GNU FreeFont 20120503 $face.ttf ($URL, sha256 $SHA256),"
