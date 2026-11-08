@@ -1,2 +1,6 @@
 .pio/
 .vscode/
+__pycache__/
+.DS_Store
+logs/
+CLAUDE.md
