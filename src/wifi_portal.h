@@ -11,4 +11,5 @@ void portalPoll();
 WifiState portalState();
 bool portalTakeStaged(KeyMap &out, uint8_t &badKey);  // badKey = 1..12 if a field was invalid, 0 = ok
 const char *portalApPassword();
+void portalSetResets(const char *summary);  // reset history line on the param page
 void portalInfo(char *out, size_t n);  // joined: "<ip> <rssi>dBm"; else "status <WiFi.status()>"

@@ -43,3 +43,30 @@
 - One `pio run -e saucedeck -e bringup` failed once (saucedeck, 3 s) and left a generated
   `src/idf_component.yml`; not reproducible (incremental, clean, without the file). Watch for it.
   [unverified cause]
+- **Firmware with Plan 1 (legend layout) + Plan 2 (status cards) + FreeSans9pt7b (2026-10-31) = 1218239 B = 38.7 % of the 3 MB huge_app slot.** `[verified: build output 2026-10-31]`
+
+## Hammerspoon helper (2026-10-31)
+
+- Hammerspoon 1.1.1 embeds Lua 5.4.7 (LuaSkin.framework strings). Host tests use Homebrew lua@5.4 (keg-only, /opt/homebrew/opt/lua@5.4/bin/lua); `lua` on PATH is 5.5. [verified: strings + lua -v, 2026-10-31]
+- `hs` CLI is at /opt/homebrew/bin/hs but answers only when the Hammerspoon config loads `hs.ipc` ("can't access Hammerspoon message port" otherwise). [verified: hs -c, 2026-10-31]
+- `hs.serial` can open the TinyUSB CDC port (`usbmodem*`) at 115200 and deliver `received` callbacks. [unverified: check on bench]
+- `icalBuddy` output with `-b "" -iep datetime,title -po datetime,title -df "" -tf %H:%M eventsToday` is `HH:MM title` per line. [unverified: check on bench]
+- `lsappinfo info -only StatusLabel Mail|Telegram` prints `"StatusLabel"={ "label"="N" }`; empty/absent label when no badge. [unverified: check on bench]
+- `hs.host.vmStat()` field names used by `cards.ramPercent` (pages active/wired/compressed, pageSize, memSize) match the real table. [unverified: check on bench]
+- `hs.itunes` targets app "iTunes"; on macOS 10.15+ the app is Music, so the music slot-1 fallback may never match. `hs.spotify` calls are synchronous AppleScript on the Hammerspoon main thread every 5 s. [unverified: check on bench]
+- `hs.serial` open asserts DTR/RTS. Check on bench that it does not reset the deck (Arduino USBCDC line-state reset detection). [unverified: check on bench]
+- Whether the PlatformIO `pre:` `AddPreAction("upload")` hook (tools/release_helper.py) runs before the espressif 1200 bps touch. [unverified: check with `pio run -t upload -v`]
+- `[env:bringup]` overrides `USB_PRODUCT` to `SAUCEDECK-BRINGUP` (saucedeck env stays `SAUCEDECK`) so the Mac helper skips it. [unverified: not bench-verified, check `system_profiler SPUSBDataType`]
+- `hs.serial.availablePortNames()` returns names like `usbmodem…` (no `/dev/cu.` prefix); `core:pickPort` and the port-loss check rely on it. [unverified: check on bench]
+- Firmware size after Plan 4 Candy LCD theme (`pio run -e saucedeck`, 2026-10-31): RAM 77 264 B (23.6 % of 327 680), Flash 1 224 391 B (38.9 % of 3 145 728 app partition). Bringup: RAM 45 088 B, Flash 427 327 B (13.6 %). [verified: build output 2026-10-31]
+- Firmware size after Plan 5 key icons + FreeSans 7pt regular label font (`pio run -e saucedeck`, 2026-11-08): RAM 78 152 B (23.9 % of 327 680), Flash 1 234 891 B (39.3 % of 3 145 728 app partition), +10 500 B flash vs Plan 4 build (icons + blob v3 + portal field + 7pt font ~1.4 KB). Bringup unchanged: RAM 45 088 B, Flash 427 327 B (13.6 %). [verified: build output 2026-11-08]
+- Adafruit fontconvert (GFX 1.12.6, DPI 141, FreeType 2.14.3, TT interpreter v35 mono) on GNU FreeFont 20120503 FreeSansBold at 7 pt: glyphs `i` and `j` come out dotless (`i` bitmap identical to `l`, 2x10). FreeSans regular 7 pt `i` keeps its dot. `tools/make_label_fonts.sh` reproduced it (before bold was dropped) -> bold 7pt not used: icon labels are FreeSans 7pt regular only. [verified: generated FreeSansBold7pt7b.h 2026-11-08; generated only to test, not committed]
+
+## Reading a crash dump (2026-11-08)
+
+- Arduino core sdkconfig: `CONFIG_ESP_COREDUMP_ENABLE_TO_FLASH=y`, ELF format; `huge_app.csv` has `coredump` at 0x3F0000, 0x10000. A panic / task-WDT panic stores the last dump there. [verified: pioarduino esp32s3 sdkconfig + read on bench 2026-11-08]
+- Read: `hs -c 'saucedeck.release(180)'`; open the port at 1200 baud (ROM download mode, new port name, e.g. /dev/cu.usbmodem21101); `python esptool.py --chip esp32s3 --port <rom port> --before no_reset --after hard_reset read_flash 0x3F0000 0x10000 core.bin`.
+- Decode: `PATH=~/.platformio/packages/tool-xtensa-esp-elf-gdb/bin:$PATH ~/.platformio/penv/bin/python -m esp_coredump --chip esp32s3 info_corefile -t raw -c core.bin .pio/build/saucedeck/firmware.elf` (ELF must be the build that crashed). [verified: bench 2026-11-08]
+- Panic console output goes to UART0 (CONFIG_ESP_CONSOLE_UART_NUM=0, GPIO43), not USB CDC. [verified: sdkconfig]
+- Task WDT: 5 s, panics, watches the core 0 idle task only (CPU1 idle not checked). [verified: sdkconfig]
+- WiFiManager 2.0.17: `shutdownConfigPortal()` calls `server->handleClient()` before any null check; call it once only (via `stopWebPortal()`, which guards itself). [verified: core dump 2026-11-08, WiFiManager.cpp:957-985]

@@ -28,6 +28,12 @@ animation, Windows, non-ASCII text on the LCD.
 
 ## 3. Screen map (320×240 landscape, rotation 3)
 
+> **Look superseded by Plan 4 "Candy" theme (2026-10-31):** per-key hue tiles (rounded,
+> 74×50, hue band on top), segmented gradient volume bar, mic pill, card dots instead of
+> `n/m`. Exact colours and geometry: [Plan 4 Global Constraints](../plans/2026-10-31-lcd-theme-candy-plan4.md);
+> mockup `assets/2026-10-31-candy-mockup.png`, sim render `assets/2026-10-31-candy-sim.png`.
+> The map below stays valid for regions and repaint scopes.
+
 ```
 y0   ┌ 14:32  Standup in 12m            ●H ●W ┐ top bar, 20 px
 y20  ├────────┬────────┬────────┬────────┤
@@ -48,7 +54,7 @@ y240 └────────────────────────
   lines. 3 px left stripe in the type colour: Keystroke grey, App blue, Url green,
   Shortcut purple.
 - **Strip line 1:** horizontal volume bar (120 px) + percent, then mic text `MIC LIVE`,
-  `MIC MUTED` (red) or `MIC 45%` (helper present). Muted speaker = grey bar + red `MUTED`.
+  `MIC OFF` (red; regular 9pt font when the text is wider than 79 px, e.g. `MIC 100%`) or `MIC 45%` (helper present). Muted speaker = grey bar + red `OFF` (`100%` in the % box falls back to bold 9pt).
 - **Strip line 2:** rotating status card (icon glyph + text + `n/m` index). Any banner
   (`BANNER_*`, existing) takes this line over while active, then the card returns.
 - The old volume screen (vertical bar, speaker and mic icons) is removed.
@@ -62,7 +68,8 @@ small; FreeSans9pt (~12 px cap-to-descender) is the minimum. Bench-check at arm'
 
 ### 4.1 Key labels (KeyMap v2)
 - `KeyEntry` gains `char label[kKeyLabelMax + 1]`, `kKeyLabelMax = 16`, printable ASCII
-  (0x20–0x7E) or empty.
+  (0x20–0x7E) or empty, excluding `" < > &` (WiFiManager inserts param values into the portal
+  HTML unescaped).
 - `KeyMap::setLabel(i, text)` validates like values (`TooLong`, `NotPrintable`).
 - NVS blob version 2: `'SDKM', 2, 12 × [type, vlen, value, llen, label], CRC32`.
   Version 1 blobs still load (labels empty). Bad magic/version/CRC → defaults as today.
@@ -113,7 +120,7 @@ small; FreeSans9pt (~12 px cap-to-descender) is the minimum. Bench-check at arm'
 - Rotation: next non-empty, non-expired slot every 5 s; `n/m` counts live slots.
   No live slots → line 2 blank.
 - Helper lost (`HostLink::present` false) → all slots cleared.
-- Exposes dirty flags for top bar and line 2 (feeds the screen model).
+- Exposes `topGen()` (slot 0 as shown) and `stripGen()` (line 2 card, n/m); each bumps only when its own content changes (feeds the screen model).
 
 ### 4.7 ScreenModel v2 (ui_layout.h)
 - State adds: 12 tile looks (label hash + type + anim level), clock text, slot-0 text,
@@ -121,6 +128,14 @@ small; FreeSans9pt (~12 px cap-to-descender) is the minimum. Bench-check at arm'
   `STRIP_MIC`, `STRIP_LINE2`, `ALL`.
 - Banner and card share line 2: banner wins while `banner != BANNER_NONE`.
 - Horizontal bar keeps the existing partial-strip idea (`barDelta` along x instead of y).
+
+### 4.8 Theme (theme.h, Plan 4)
+- Candy colours (`kTheme*`, `kKeyHues`), `tileLook` (idle tint → full hue by press level),
+  `chooseLegend` (bold/regular, 1–2 lines, 68 px), 20 volume segments (`litSegments`,
+  `segmentColor`, `segDelta`), `cardDotX`. Volume repaint = changed segments only.
+  Spec: [Plan 4](../plans/2026-10-31-lcd-theme-candy-plan4.md).
+- Plan 5: keys with an icon draw a 24x24 icon above a one-line FreeSans 7pt label (`fitLine`, 72 px); icon 0
+  keeps the text tile above. Spec: [key icons](2026-11-08-key-icons-design.md).
 
 ## 5. src/ glue
 - `display.cpp`: rewrite of the layout; draws from ScreenModel v2 dirty flags only. Adds
@@ -178,7 +193,7 @@ top bar repaint. `TIME` → `DeckClock` → top bar once a minute.
 - Helper gone 3 s → cards cleared, helper dot grey, clock keeps running.
 - Port held by the helper during upload → pre-upload script releases it; if `hs` missing,
   upload fails as today and docs say: quit Hammerspoon or run `saucedeck.release()`.
-- Label missing/invalid in NVS v2 → entry loads with empty label → derived label shown.
+- Invalid label in an NVS v2 blob (fails `setLabel` validation) → whole blob rejected → defaults + "Key map reset" banner. (A v1 blob has no labels: entries load with empty labels → derived label shown.)
 
 ## 9. Power and hardware
 - No new parts, no pin changes. Backlight unchanged (19 mA on GPIO9, 1 mA margin, see

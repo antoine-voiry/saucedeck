@@ -2,6 +2,8 @@
 #include <stdio.h>
 #include <unity.h>
 #include <vector>
+#include "icons.h"
+#include "keymap.h"
 #include "mcp23017.h"
 #include "sim_deck.h"
 #include "sim_test.h"
@@ -90,6 +92,18 @@ SIM_TEST(test_two_keys_held_then_one_released) {
 static void bootWithMacDaily(SimDeck &sim) {
   TEST_ASSERT_TRUE(sim.loadPresetIntoNvs(SIM_PROJECT_DIR "/presets/mac-daily.json"));
   sim.boot();
+}
+
+SIM_TEST(test_preset_loader_stores_each_keys_own_icon) {
+  SimDeck sim;
+  TEST_ASSERT_TRUE(sim.loadPresetIntoNvs(SIM_PROJECT_DIR "/presets/mac-daily.json"));
+  const std::vector<uint8_t> &blob = board().nvs.ns["saucedeck"]["keymap"];
+  KeyMap m;
+  TEST_ASSERT_TRUE(deserializeKeyMap(blob.data(), blob.size(), m));
+  const char *const kWant[] = {"camera", "globe", "envelope", "plane",   "cube",    "gear",
+                               "question", "play", "eye-off",  "chat",    "weather", "printer"};
+  for (uint8_t i = 0; i < kKeyCount; i++)
+    TEST_ASSERT_EQUAL_STRING(kWant[i], iconName(m.entry(i).icon));
 }
 
 SIM_TEST(test_mac_daily_keys_1_to_8_send_f13_to_f20) {
@@ -210,6 +224,7 @@ int main(int, char **) {
   RUN_TEST(test_default_map_each_key_sends_its_f_key);
   RUN_TEST(test_bounce_shorter_than_debounce_sends_nothing);
   RUN_TEST(test_two_keys_held_then_one_released);
+  RUN_TEST(test_preset_loader_stores_each_keys_own_icon);
   RUN_TEST(test_mac_daily_keys_1_to_8_send_f13_to_f20);
   RUN_TEST(test_mac_daily_key_9_sends_cmd_h);
   RUN_TEST(test_mac_daily_keys_10_to_12_send_ctrl_alt_cmd_f13_to_f15);

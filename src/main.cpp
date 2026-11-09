@@ -10,9 +10,11 @@
 #include "mcp_io.h"
 #include "encoders.h"
 #include "idle_dimmer.h"
+#include "tile_anim.h"
 #include "helper_link.h"
 #include "keymap_store.h"
 #include "wifi_portal.h"
+#include "reset_store.h"
 #include <esp_system.h>
 
 USBHIDKeyboard Keyboard;
@@ -36,13 +38,15 @@ static_assert(sizeof(kConsumerCodes) / sizeof(kConsumerCodes[0]) ==
 static Deck deck(16);  // macOS: 16 VOL+/- steps full range (unverified)
 static bool mcpOk = false;
 static bool keymapResetNotice = false;  // blob present but corrupt -> defaults (banner)
-static bool brownoutNotice = false;     // last reset was a brownout (banner)
+static bool resetNotice = false;        // last reset was not a power-on (banner)
 static uint32_t helperMissingUntil = 0;
 static WifiSession wifi;
 static uint8_t wifiInfoTick = 0;  // forces a banner redraw when the info text changes
 static uint8_t invalidKey = 0;
 static uint32_t invalidUntil = 0, wifiFailedUntil = 0;  // "helper not running" banner end
 static IdleDimmer dimmer;  // LEDs + LCD fade after 120 s idle, off at 240 s
+static TileAnim tileAnim;    // legend tile press feedback
+static uint8_t keymapGen = 0;  // bumped when a key map goes live: legends repaint
 
 static void run(const ActionList &actions) {
   for (size_t i = 0; i < actions.count; i++) {
@@ -92,7 +96,10 @@ static void run(const ActionList &actions) {
         ledsSetWifi(wifi.on());
         break;
       case ActionType::KeyMapDiscarded: break;  // banner simply disappears
-      case ActionType::KeyMapCommitted: keymapSave(deck.keyMap()); break;
+      case ActionType::KeyMapCommitted:
+        keymapSave(deck.keyMap());
+        keymapGen++;
+        break;
       case ActionType::MicMute:
         // Release only the chord keys: deck F-keys may still be held
         for (uint8_t k : kMicMuteChord) Keyboard.press(k);
@@ -126,7 +133,15 @@ void setup() {
   bool loaded = keymapLoad(stored);
   if (loaded) deck.setKeyMap(stored);
   keymapResetNotice = hadMap && !loaded;
-  brownoutNotice = esp_reset_reason() == ESP_RST_BROWNOUT;
+  ResetLog resets;
+  ResetEntry boot = resetRecordBoot(resets);
+  resetNotice = resetNotable(boot.reason);
+  char text[40];
+  formatReset(boot, text, sizeof text);
+  displaySetResetText(text);
+  char summary[200];
+  resets.summary(summary, sizeof summary);
+  portalSetResets(summary);
 
   displayBegin();
   ledsBegin();
@@ -138,6 +153,11 @@ void setup() {
 
 void loop() {
   uint32_t now = millis();
+  static uint32_t lastUptime = 0;
+  if (now - lastUptime >= 1000) {  // uptime survives a crash in RTC memory: next boot's banner
+    lastUptime = now;
+    resetUptimeTick(now);
+  }
   helperPoll(now);
   const HostLink &hl = helperLink();
   deck.setHelperPresent(hl.present(now));
@@ -149,6 +169,7 @@ void loop() {
   encodersRead(d1, d2);
   if (d1 || d2) deck.onEncoders(d1, d2, millis(), actions);
   run(actions);
+  tileAnim.onKeys(deck.keysHeld(), helperMissingKeys(actions), now);
 
   now = millis();
   portalPoll();
@@ -188,6 +209,9 @@ void loop() {
   ledsSetDim(dim);
   displaySetDim(dim);
 
+  StatusBoard &status = helperStatus();
+  if (!hl.present(now)) status.clear();  // cards are only true while the helper runs
+  status.tick(now);
   // Helper connected: show the Mac's real volume / mic; otherwise the deck's own count
   const VolumeState &spk = deck.speaker();
   bool live = hl.present(now) && hl.hasVolume();
@@ -221,9 +245,11 @@ void loop() {
     arg = wifiInfoTick;
   } else if (keymapResetNotice && now < 5000) {
     banner = BANNER_KEYMAP_RESET;
-  } else if (brownoutNotice && now < 8000) {
-    banner = BANNER_BROWNOUT;
+  } else if (resetNotice && now < 30000) {
+    banner = BANNER_RESET;
   }
-  displayUpdate({pct, spkMuted, micMuted, micKnown, micPct, banner, arg}, now);
+  displayUpdate({pct, spkMuted, micMuted, micKnown, micPct, banner, arg, keymapGen, hl.present(now), wifi.on(),
+                 helperClock().minuteOfDay(now), status.topGen(), status.stripGen()},
+                deck.keyMap(), tileAnim, status, now);
   ledsUpdate({pct, spkMuted, micMuted}, now);
 }

@@ -29,6 +29,15 @@ struct ActionList {
   }
 };
 
+// Keys whose press could not run (App/Url/Shortcut while the helper is absent); bit i = key i.
+inline uint16_t helperMissingKeys(const ActionList &a) {
+  uint16_t m = 0;
+  for (size_t i = 0; i < a.count; i++)
+    if (a.items[i].type == ActionType::HelperMissing && a.items[i].value < kKeyCount)
+      m = static_cast<uint16_t>(m | (1u << a.items[i].value));
+  return m;
+}
+
 // Deck behaviour, hardware-free: debounced keys -> F-key indices, knob switches ->
 // mute / mic mute / sync, rotation -> one consumer report per detent.
 // State is open loop (HID cannot read the host back); sync() re-aligns it.
@@ -90,6 +99,8 @@ class Deck {
     }
     if (chord & CHORD_WIFI) out.push(ActionType::WifiToggle);
   }
+
+  uint16_t keysHeld() const { return held_ & DECK_KEYS; }  // debounced, bit i = key i
 
   static constexpr uint32_t kConfirmMs = 30000;
   // Portal save -> staged; it only goes live after a knob 1 press within kConfirmMs.

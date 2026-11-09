@@ -24,24 +24,76 @@ Tried 2026-10-24 on macOS 26.7.1, bench-verified:
    `http://saucedeck.local/param`, **Load preset** → `presets/mac-daily.json`, **Save**,
    then press knob 1 on the deck.
 
+   After flashing icon firmware, the stored key map stays text-only (no icons) until you reload the
+   preset, press Save and confirm with knob 1. Rolling back to older firmware rejects the new (v3)
+   key map blob, so the deck shows the default F13-F24 until you Save a map again.
+
 ## Key map
 
-| Deck key | Sends | Action |
-|---|---|---|
-| 1 | F13 | Screenshot toolbar |
-| 2 | F14 | Google Chrome |
-| 3 | F15 | Gmail in Chrome |
-| 4 | F16 | Telegram |
-| 5 | F17 | Autodesk Fusion |
-| 6 | F18 | System Settings |
-| 7 | F19 | Tips (help) |
-| 8 | F20 | YouTube in Chrome |
-| 9 | Cmd+H | Hide front app (macOS itself, no Hammerspoon) |
-| 10 | Ctrl+Opt+Cmd+F13 | Messages |
-| 11 | Ctrl+Opt+Cmd+F14 | Weather |
-| 12 | Ctrl+Opt+Cmd+F15 | Bambu Studio |
+| Deck key | Sends | Action | LCD label | Icon |
+|---|---|---|---|---|
+| 1 | F13 | Screenshot toolbar | Screenshot | `camera` |
+| 2 | F14 | Google Chrome | Chrome | `globe` |
+| 3 | F15 | Gmail in Chrome | Gmail | `envelope` |
+| 4 | F16 | Telegram | Telegram | `plane` |
+| 5 | F17 | Autodesk Fusion | Fusion 360 | `cube` |
+| 6 | F18 | System Settings | Settings | `gear` |
+| 7 | F19 | Tips (help) | Help | `question` |
+| 8 | F20 | YouTube in Chrome | YouTube | `play` |
+| 9 | Cmd+H | Hide front app (macOS itself, no Hammerspoon) | Hide app | `eye-off` |
+| 10 | Ctrl+Opt+Cmd+F13 | Messages | iMessage | `chat` |
+| 11 | Ctrl+Opt+Cmd+F14 | Weather | Weather | `weather` |
+| 12 | Ctrl+Opt+Cmd+F15 | Bambu Studio | Bambu | `printer` |
+
+Each tile shows a 24x24 icon above a one-line label (Plan 5, [spec](superpowers/specs/2026-11-08-key-icons-design.md)).
+The portal has an icon field per key (`Key n icon`, empty = text-only tile); the preset sets them.
 
 Edit actions in `tools/mac/hammerspoon.lua`, then Hammerspoon menu → Reload Config.
 Bench-verified 2026-10-24: keys 1-9 and 11-12. Key 10: the deck sends Ctrl+Opt+Cmd+F13 (seen by a
 CGEventTap logger) and the Hammerspoon binding is registered; Messages not coming up was a Mac-side
 issue. Closed.
+
+## Status helper
+
+`tools/mac/saucedeck_helper.lua` talks to the deck over the USB serial port (115200) and feeds the
+LCD: volume, mic, clock and six status cards. Mic knob input comes back the same way.
+
+Add one line to `~/.hammerspoon/init.lua`, then Reload Config:
+
+```lua
+dofile(os.getenv("HOME") .. "/saucedeck/tools/mac/saucedeck_helper.lua")
+```
+
+Optional: `brew install ical-buddy` for the meeting card; macOS asks for Calendar access on first use.
+
+Card slots (a source that fails or has nothing to show clears its slot):
+
+| Slot | Shows | Refresh |
+|---|---|---|
+| 0 | Next meeting today (icalBuddy) | 60 s |
+| 1 | Now playing (Spotify, then Music) | 5 s |
+| 2 | CPU % and RAM % | 5 s |
+| 3 | Battery % and charging | 60 s |
+| 4 | Weather (wttr.in) | 15 min |
+| 5 | Unread badge counts for Mail and Telegram (lsappinfo) | 30 s |
+
+The helper connects only to a USB device whose product name is exactly `SAUCEDECK` (the bring-up
+firmware enumerates as `SAUCEDECK-BRINGUP` and is ignored). `tools/bench.py` releases the port
+automatically (10 min) before opening it. Before `pio device monitor`, run
+`hs -c 'saucedeck.release(3600)'`; afterwards run `hs -c 'saucedeck.resume()'`.
+
+Uploading: `pio run -t upload` calls `tools/release_helper.py`, which runs `hs -c "saucedeck.release()"`
+when the `hs` CLI exists. The helper closes the port and stays away for 60 s. Without the `hs` CLI,
+quit Hammerspoon or run `saucedeck.release()` in its console before flashing. `saucedeck.status()`
+returns the link state.
+
+The helper pause after release is 60 s. An upload longer than that could see the helper reopen the port; if so, quit Hammerspoon.
+
+Tests (host, no Hammerspoon needed):
+
+```sh
+/opt/homebrew/opt/lua@5.4/bin/lua test/lua/run.lua
+~/.platformio/penv/bin/python -m unittest discover -s test/tools
+```
+
+Not bench-verified: needs the helper loaded in Hammerspoon and a deck on USB.

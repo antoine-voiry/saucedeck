@@ -1,17 +1,17 @@
 {
   "name": "Mac daily (Hammerspoon: tools/mac/hammerspoon.lua, see docs/mac-setup.md)",
   "keys": [
-    { "label": "Screenshot",      "type": "key", "value": "f13" },
-    { "label": "Chrome",          "type": "key", "value": "f14" },
-    { "label": "Gmail in Chrome", "type": "key", "value": "f15" },
-    { "label": "Telegram",        "type": "key", "value": "f16" },
-    { "label": "Fusion 360",      "type": "key", "value": "f17" },
-    { "label": "System Settings", "type": "key", "value": "f18" },
-    { "label": "Help (Tips)",     "type": "key", "value": "f19" },
-    { "label": "YouTube",         "type": "key", "value": "f20" },
-    { "label": "Hide app",        "type": "key", "value": "cmd+h" },
-    { "label": "iMessage",        "type": "key", "value": "ctrl+alt+cmd+f13" },
-    { "label": "Weather",         "type": "key", "value": "ctrl+alt+cmd+f14" },
-    { "label": "Bambu Studio",    "type": "key", "value": "ctrl+alt+cmd+f15" }
+    { "label": "Screenshot", "type": "key", "value": "f13", "icon": "camera" },
+    { "label": "Chrome", "type": "key", "value": "f14", "icon": "globe" },
+    { "label": "Gmail", "type": "key", "value": "f15", "icon": "envelope" },
+    { "label": "Telegram", "type": "key", "value": "f16", "icon": "plane" },
+    { "label": "Fusion 360", "type": "key", "value": "f17", "icon": "cube" },
+    { "label": "Settings", "type": "key", "value": "f18", "icon": "gear" },
+    { "label": "Help", "type": "key", "value": "f19", "icon": "question" },
+    { "label": "YouTube", "type": "key", "value": "f20", "icon": "play" },
+    { "label": "Hide app", "type": "key", "value": "cmd+h", "icon": "eye-off" },
+    { "label": "iMessage", "type": "key", "value": "ctrl+alt+cmd+f13", "icon": "chat" },
+    { "label": "Weather", "type": "key", "value": "ctrl+alt+cmd+f14", "icon": "weather" },
+    { "label": "Bambu", "type": "key", "value": "ctrl+alt+cmd+f15", "icon": "printer" }
   ]
 }

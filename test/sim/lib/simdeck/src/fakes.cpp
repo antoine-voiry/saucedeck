@@ -324,16 +324,44 @@ bool WiFiManager::autoConnect(const char *ssid, const char *pass) {
     return true;
   }
   w.portalActive = w.portalOk;
+  w.serverUp = w.portalOk;  // startConfigPortal -> setupConfigPortal allocates the server
   return false;
 }
 bool WiFiManager::getConfigPortalActive() { return board().wifi.portalActive; }
-void WiFiManager::stopWebPortal() { board().wifi.webPortal = false; }
-bool WiFiManager::stopConfigPortal() {
-  board().wifi.portalActive = false;
+
+// WiFiManager 2.0.17 shutdownConfigPortal() (WiFiManager.cpp:957-985): returns early only if
+// webPortalActive, then calls server->handleClient() unconditionally. With the server already
+// freed (or never allocated) that is a null dereference: LoadProhibited at 0x0 on the chip
+// (core dump 2026-11-08). The sim aborts the device the same way.
+static bool shutdownConfigPortal() {
+  SimWifi &w = board().wifi;
+  if (w.webPortal) return false;
+  if (!w.serverUp) {
+    fprintf(stderr, "SIM CRASH: WiFiManager::shutdownConfigPortal server->handleClient() on null server\n");
+    abort();
+  }
+  w.serverUp = false;  // server->stop(); server.reset();
+  if (!w.portalActive) return false;
+  w.portalActive = false;  // dnsServer stop, soft AP off
   return true;
 }
+void WiFiManager::stopWebPortal() {  // WiFiManager.cpp:569
+  SimWifi &w = board().wifi;
+  if (!w.portalActive && !w.webPortal) return;
+  w.webPortal = false;
+  shutdownConfigPortal();
+}
+bool WiFiManager::stopConfigPortal() {  // non-blocking mode: straight to shutdownConfigPortal
+  if (blocking_) return true;
+  return shutdownConfigPortal();
+}
 bool WiFiManager::process() { return true; }
-void WiFiManager::startWebPortal() { board().wifi.webPortal = true; }
+void WiFiManager::startWebPortal() {  // WiFiManager.cpp startWebPortal
+  SimWifi &w = board().wifi;
+  if (w.portalActive || w.webPortal) return;
+  w.serverUp = true;
+  w.webPortal = true;
+}
 
 bool MDNSResponder::begin(const char *hostName) {
   board().wifi.mdnsName = hostName;
@@ -342,6 +370,216 @@ bool MDNSResponder::begin(const char *hostName) {
 void MDNSResponder::end() { board().wifi.mdnsName.clear(); }
 
 // --- LCD ---
+// Rasterizers below are ports of Adafruit GFX 1.12.x (Adafruit_GFX.cpp, BSD) writing to
+// board().lcd.fb with clipping to the 320x240 panel.
+
+#include "sim/glcdfont.h"
+
+static uint8_t font5x7ColumnForSim(unsigned char c, int col) { return font[c * 5 + col]; }
+
+static void putPx(int16_t x, int16_t y, uint16_t c) {
+  if (x < 0 || y < 0 || x >= SimLcd::kW || y >= SimLcd::kH) return;
+  board().lcd.fb[y][x] = c;
+}
+static void hLine(int16_t x, int16_t y, int16_t w, uint16_t c) {
+  for (int16_t i = 0; i < w; i++) putPx(static_cast<int16_t>(x + i), y, c);
+}
+static void vLine(int16_t x, int16_t y, int16_t h, uint16_t c) {
+  for (int16_t i = 0; i < h; i++) putPx(x, static_cast<int16_t>(y + i), c);
+}
+static void rectFill(int16_t x, int16_t y, int16_t w, int16_t h, uint16_t c) {
+  for (int16_t j = 0; j < h; j++) hLine(x, static_cast<int16_t>(y + j), w, c);
+}
+static void swap16(int16_t &a, int16_t &b) {
+  int16_t t = a;
+  a = b;
+  b = t;
+}
+
+static void lineDraw(int16_t x0, int16_t y0, int16_t x1, int16_t y1, uint16_t c) {
+  const bool steep = abs(y1 - y0) > abs(x1 - x0);
+  if (steep) {
+    swap16(x0, y0);
+    swap16(x1, y1);
+  }
+  if (x0 > x1) {
+    swap16(x0, x1);
+    swap16(y0, y1);
+  }
+  const int16_t dx = x1 - x0, dy = abs(y1 - y0);
+  int16_t err = dx / 2;
+  const int16_t ystep = y0 < y1 ? 1 : -1;
+  for (; x0 <= x1; x0++) {
+    if (steep) putPx(y0, x0, c);
+    else putPx(x0, y0, c);
+    err -= dy;
+    if (err < 0) {
+      y0 += ystep;
+      err += dx;
+    }
+  }
+}
+
+static void circleHelper(int16_t x0, int16_t y0, int16_t r, uint8_t corner, uint16_t c) {
+  int16_t f = 1 - r, ddFx = 1, ddFy = -2 * r, x = 0, y = r;
+  while (x < y) {
+    if (f >= 0) {
+      y--;
+      ddFy += 2;
+      f += ddFy;
+    }
+    x++;
+    ddFx += 2;
+    f += ddFx;
+    if (corner & 0x4) {
+      putPx(x0 + x, y0 + y, c);
+      putPx(x0 + y, y0 + x, c);
+    }
+    if (corner & 0x2) {
+      putPx(x0 + x, y0 - y, c);
+      putPx(x0 + y, y0 - x, c);
+    }
+    if (corner & 0x8) {
+      putPx(x0 - y, y0 + x, c);
+      putPx(x0 - x, y0 + y, c);
+    }
+    if (corner & 0x1) {
+      putPx(x0 - y, y0 - x, c);
+      putPx(x0 - x, y0 - y, c);
+    }
+  }
+}
+
+static void circleFillHelper(int16_t x0, int16_t y0, int16_t r, uint8_t corners, int16_t delta, uint16_t c) {
+  int16_t f = 1 - r, ddFx = 1, ddFy = -2 * r, x = 0, y = r, pxx = x, pyy = y;
+  delta++;
+  while (x < y) {
+    if (f >= 0) {
+      y--;
+      ddFy += 2;
+      f += ddFy;
+    }
+    x++;
+    ddFx += 2;
+    f += ddFx;
+    if (x < (y + 1)) {
+      if (corners & 1) vLine(x0 + x, y0 - y, 2 * y + delta, c);
+      if (corners & 2) vLine(x0 - x, y0 - y, 2 * y + delta, c);
+    }
+    if (y != pyy) {
+      if (corners & 1) vLine(x0 + pyy, y0 - pxx, 2 * pxx + delta, c);
+      if (corners & 2) vLine(x0 - pyy, y0 - pxx, 2 * pxx + delta, c);
+      pyy = y;
+    }
+    pxx = x;
+  }
+}
+
+static void triangleFill(int16_t x0, int16_t y0, int16_t x1, int16_t y1, int16_t x2, int16_t y2, uint16_t c) {
+  int16_t a, b, y, last;
+  if (y0 > y1) {
+    swap16(y0, y1);
+    swap16(x0, x1);
+  }
+  if (y1 > y2) {
+    swap16(y2, y1);
+    swap16(x2, x1);
+  }
+  if (y0 > y1) {
+    swap16(y0, y1);
+    swap16(x0, x1);
+  }
+  if (y0 == y2) {
+    a = b = x0;
+    if (x1 < a) a = x1;
+    else if (x1 > b) b = x1;
+    if (x2 < a) a = x2;
+    else if (x2 > b) b = x2;
+    hLine(a, y0, b - a + 1, c);
+    return;
+  }
+  const int16_t dx01 = x1 - x0, dy01 = y1 - y0, dx02 = x2 - x0, dy02 = y2 - y0, dx12 = x2 - x1, dy12 = y2 - y1;
+  int32_t sa = 0, sb = 0;
+  last = (y1 == y2) ? y1 : static_cast<int16_t>(y1 - 1);
+  for (y = y0; y <= last; y++) {
+    a = x0 + sa / dy01;
+    b = x0 + sb / dy02;
+    sa += dx01;
+    sb += dx02;
+    if (a > b) swap16(a, b);
+    hLine(a, y, b - a + 1, c);
+  }
+  sa = static_cast<int32_t>(dx12) * (y - y1);
+  sb = static_cast<int32_t>(dx02) * (y - y0);
+  for (; y <= y2; y++) {
+    a = x1 + sa / dy12;
+    b = x0 + sb / dy02;
+    sa += dx12;
+    sb += dx02;
+    if (a > b) swap16(a, b);
+    hLine(a, y, b - a + 1, c);
+  }
+}
+
+// drawChar: classic 5x7 (opaque when bg != fg) or custom GFX glyph (transparent, y = baseline).
+static void drawGlyph(const GFXfont *font, int16_t x, int16_t y, unsigned char ch, uint16_t fg, uint16_t bg,
+                      uint8_t sz) {
+  if (!font) {
+    if (ch >= 176) ch++;  // Adafruit "classic" charset behaviour (!_cp437)
+    for (int8_t i = 0; i < 5; i++) {
+      uint8_t line = font5x7ColumnForSim(ch, i);
+      for (int8_t j = 0; j < 8; j++, line >>= 1) {
+        if (line & 1) rectFill(x + i * sz, y + j * sz, sz, sz, fg);
+        else if (bg != fg) rectFill(x + i * sz, y + j * sz, sz, sz, bg);
+      }
+    }
+    if (bg != fg) rectFill(x + 5 * sz, y, sz, 8 * sz, bg);
+    return;
+  }
+  const GFXglyph &g = font->glyph[ch - font->first];
+  uint16_t bo = g.bitmapOffset;
+  uint8_t bits = 0, bit = 0;
+  for (uint8_t yy = 0; yy < g.height; yy++)
+    for (uint8_t xx = 0; xx < g.width; xx++) {
+      if (!(bit++ & 7)) bits = font->bitmap[bo++];
+      if (bits & 0x80) rectFill(x + (g.xOffset + xx) * sz, y + (g.yOffset + yy) * sz, sz, sz, fg);
+      bits <<= 1;
+    }
+}
+
+bool SimLcd::saveBmp(const char *path) const {
+  FILE *f = fopen(path, "wb");
+  if (!f) return false;
+  const uint32_t dataBytes = static_cast<uint32_t>(kW) * kH * 3;  // 960 B/row: already 4-byte aligned
+  const uint32_t fileBytes = 54 + dataBytes;
+  uint8_t h[54] = {'B', 'M'};
+  auto put32 = [&h](int off, uint32_t v) {
+    for (int i = 0; i < 4; i++) h[off + i] = static_cast<uint8_t>(v >> (8 * i));
+  };
+  put32(2, fileBytes);
+  put32(10, 54);       // pixel data offset
+  put32(14, 40);       // BITMAPINFOHEADER
+  put32(18, kW);
+  put32(22, kH);       // positive = bottom-up rows
+  h[26] = 1;           // planes
+  h[28] = 24;          // bits per pixel
+  put32(34, dataBytes);
+  put32(38, 2835);
+  put32(42, 2835);
+  bool ok = fwrite(h, 1, sizeof h, f) == sizeof h;
+  uint8_t row[kW * 3];
+  for (int y = kH - 1; ok && y >= 0; y--) {
+    for (int x = 0; x < kW; x++) {
+      const uint16_t c = fb[y][x];
+      const uint8_t r5 = c >> 11, g6 = (c >> 5) & 0x3F, b5 = c & 0x1F;
+      row[x * 3 + 0] = static_cast<uint8_t>(b5 << 3 | b5 >> 2);
+      row[x * 3 + 1] = static_cast<uint8_t>(g6 << 2 | g6 >> 4);
+      row[x * 3 + 2] = static_cast<uint8_t>(r5 << 3 | r5 >> 2);
+    }
+    ok = fwrite(row, 1, sizeof row, f) == sizeof row;
+  }
+  return fclose(f) == 0 && ok;
+}
 
 Adafruit_ST7789::Adafruit_ST7789(SPIClass *, int8_t, int8_t, int8_t) {}
 void Adafruit_ST7789::init(uint16_t, uint16_t, uint8_t) { board().lcd.inited = true; }
@@ -349,15 +587,70 @@ void Adafruit_ST7789::setSPISpeed(uint32_t hz) { board().lcd.spiHz = hz; }
 void Adafruit_ST7789::setRotation(uint8_t r) { board().lcd.rotation = r; }
 void Adafruit_ST7789::setTextWrap(bool) {}
 void Adafruit_ST7789::enableSleep(bool on) { board().lcd.asleep = on; }
-void Adafruit_ST7789::fillScreen(uint16_t) { board().lcd.fills++; }
-void Adafruit_ST7789::fillRect(int16_t, int16_t, int16_t, int16_t, uint16_t) { board().lcd.fills++; }
-void Adafruit_ST7789::drawRect(int16_t, int16_t, int16_t, int16_t, uint16_t) {}
-void Adafruit_ST7789::fillRoundRect(int16_t, int16_t, int16_t, int16_t, int16_t, uint16_t) {}
-void Adafruit_ST7789::fillTriangle(int16_t, int16_t, int16_t, int16_t, int16_t, int16_t, uint16_t) {}
-void Adafruit_ST7789::drawLine(int16_t, int16_t, int16_t, int16_t, uint16_t) {}
-void Adafruit_ST7789::drawCircleHelper(int16_t, int16_t, int16_t, uint8_t, uint16_t) {}
+void Adafruit_ST7789::fillScreen(uint16_t c) {
+  board().lcd.fills++;
+  rectFill(0, 0, SimLcd::kW, SimLcd::kH, c);
+}
+void Adafruit_ST7789::fillRect(int16_t x, int16_t y, int16_t w, int16_t h, uint16_t c) {
+  board().lcd.fills++;
+  board().lcd.rects.push_back({x, y, w, h, c});
+  rectFill(x, y, w, h, c);
+}
+void Adafruit_ST7789::drawRect(int16_t x, int16_t y, int16_t w, int16_t h, uint16_t c) {
+  hLine(x, y, w, c);
+  hLine(x, y + h - 1, w, c);
+  vLine(x, y, h, c);
+  vLine(x + w - 1, y, h, c);
+}
+void Adafruit_ST7789::fillRoundRect(int16_t x, int16_t y, int16_t w, int16_t h, int16_t r, uint16_t c) {
+  board().lcd.rounds.push_back({x, y, w, h, c});
+  const int16_t maxR = (w < h ? w : h) / 2;
+  if (r > maxR) r = maxR;
+  rectFill(x + r, y, w - 2 * r, h, c);
+  circleFillHelper(x + w - r - 1, y + r, r, 1, h - 2 * r - 1, c);
+  circleFillHelper(x + r, y + r, r, 2, h - 2 * r - 1, c);
+}
+void Adafruit_ST7789::fillTriangle(int16_t x0, int16_t y0, int16_t x1, int16_t y1, int16_t x2, int16_t y2,
+                                   uint16_t c) {
+  triangleFill(x0, y0, x1, y1, x2, y2, c);
+}
+void Adafruit_ST7789::drawFastHLine(int16_t x, int16_t y, int16_t w, uint16_t c) {
+  board().lcd.hlines.push_back({x, y, w, 1, c});
+  hLine(x, y, w, c);
+}
+void Adafruit_ST7789::drawLine(int16_t x0, int16_t y0, int16_t x1, int16_t y1, uint16_t c) {
+  lineDraw(x0, y0, x1, y1, c);
+}
+void Adafruit_ST7789::drawCircleHelper(int16_t x, int16_t y, int16_t r, uint8_t corner, uint16_t c) {
+  circleHelper(x, y, r, corner, c);
+}
+void Adafruit_ST7789::fillCircle(int16_t x, int16_t y, int16_t r, uint16_t c) {
+  board().lcd.circles.push_back({x, y, r, r, c});
+  vLine(x, y - r, 2 * r + 1, c);
+  circleFillHelper(x, y, r, 3, 0, c);
+}
 size_t Adafruit_ST7789::print(const char *s) {
-  board().lcd.texts.push_back({cx_, cy_, textSize_, fg_, s});
+  board().lcd.texts.push_back({cx_, cy_, textSize_, fg_, s, font_ != nullptr, font_});
+  // Adafruit_GFX::write(): cursor update and glyph placement (setTextWrap is not modelled).
+  for (const char *p = s; *p; p++) {
+    const unsigned char ch = static_cast<unsigned char>(*p);
+    if (!font_) {
+      if (ch == '\n') {
+        cx_ = 0;
+        cy_ += textSize_ * 8;
+      } else if (ch != '\r') {
+        drawGlyph(nullptr, cx_, cy_, ch, fg_, bg_, textSize_);
+        cx_ += textSize_ * 6;
+      }
+    } else if (ch == '\n') {
+      cx_ = 0;
+      cy_ += textSize_ * font_->yAdvance;
+    } else if (ch != '\r' && ch >= font_->first && ch <= font_->last) {
+      const GFXglyph &g = font_->glyph[ch - font_->first];
+      if (g.width > 0 && g.height > 0) drawGlyph(font_, cx_, cy_, ch, fg_, bg_, textSize_);
+      cx_ += g.xAdvance * textSize_;
+    }
+  }
   return strlen(s);
 }
 
