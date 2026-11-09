@@ -1,3 +1,19 @@
+# Build / editor
 .pio/
 .vscode/
 __pycache__/
+.DS_Store
+
+# Local only: AI assistant instructions and workspace state
+CLAUDE.md
+CLAUDE.local.md
+.claude/
+.superpowers/
+
+# Local serial captures (curated bring-up logs live in docs/bringup/)
+logs/
+
+# Secrets and backups
+.env
+.env.*
+*.bundle
